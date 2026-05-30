@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"D:\\\\bi-agent\" 2>&1 | head -50)",
+      "Read(//d/bi-agent/**)"
+    ]
+  }
+}
