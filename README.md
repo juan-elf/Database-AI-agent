@@ -2,7 +2,7 @@
 
 An LLM-powered CLI agent that answers natural language questions about any SQLite database. The agent generates SQL, executes it, optionally searches the web for external context, and replies in clean formatted text.
 
-Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strategy, SQL self-correction, and per-session JSONL observability logs.
+Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strategy, SQL self-correction, and per-session JSONL observability logs. Comes with a **Streamlit dashboard** for chat, data exploration, and session analytics.
 
 ---
 
@@ -15,6 +15,7 @@ Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strat
 - **Safe by design** — only `SELECT`/`WITH` allowed; dangerous keywords blacklisted; multi-statement blocked; identifier validation
 - **Pretty CLI** — `rich`-based tables, syntax-highlighted SQL, web result panels, spinners, markdown rendering
 - **Observability** — every session logged to JSONL
+- **Auto-chart generation** — SQL results with numeric/time-series data are automatically visualized as charts in the dashboard chat
 
 ---
 
@@ -60,6 +61,7 @@ Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strat
 | `web_search.py` | Tavily API integration for external web search |
 | `ui.py` | All presentation logic (rich-based) — panels, tables, spinners, markdown |
 | `logger.py` | Per-session JSONL logger |
+| `dashboard.py` | Streamlit web dashboard — Chat, DB Explorer, Session History, Analytics |
 | `domains/` | Domain pack files (`*.md`) — specialist knowledge injected into the system prompt |
 | `data/` | SQLite database files (gitignored) |
 | `logs/` | Per-session log files (gitignored) |
@@ -88,6 +90,39 @@ pip install -r requirements.txt
 MINIMAX_API_KEY=sk-your-key-here
 TAVILY_API_KEY=tvly-xxxxx        # optional — enables web search
 ```
+
+---
+
+## Dashboard
+
+A Streamlit web dashboard for visual interaction with the agent.
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+streamlit run dashboard.py
+# Opens at http://localhost:8501
+```
+
+### Dashboard tabs
+
+| Tab | Description |
+|---|---|
+| 📊 **Dashboard** | KPI overview, SOH/capacity charts, session table |
+| 💬 **Chat** | Talk to the agent in-browser; SQL results auto-visualized as charts |
+| 🗄️ **DB Explorer** | Schema browser, data preview, quick charts |
+| 📋 **Riwayat Sesi** | Browse all session logs with full Q&A timeline |
+| 📈 **Analytics** | Aggregate stats — tool usage, token breakdown, session comparison |
+
+### Auto-chart generation
+
+When the agent executes a SQL query in the Chat tab, the dashboard automatically detects the result shape and renders the most appropriate chart:
+
+| Result shape | Chart type |
+|---|---|
+| Numeric column(s) + time/cycle axis | Line chart |
+| Categorical column + numeric | Bar chart |
+| Two numeric columns | Scatter plot |
+| Single value or < 2 rows | No chart (not worth visualizing) |
 
 ---
 
@@ -226,6 +261,7 @@ universal-sql-agent/
 ├── web_search.py           # Tavily web search integration
 ├── ui.py                   # rich-based presentation
 ├── logger.py               # JSONL session logger
+├── dashboard.py            # Streamlit web dashboard
 ├── domains/
 │   ├── battery.md          # domain pack: Li-ion battery research
 │   └── ecommerce.md        # domain pack: e-commerce / retail
