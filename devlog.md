@@ -2,6 +2,93 @@
 
 ---
 
+## 2026-06-10 — Session 12: Eval Diperluas (C)
+
+### Yang dikerjakan
+
+**Regenerate `data/demo.db`**
+
+Demo DB lama punya masalah: rate degradasi terlalu lambat sehingga tidak ada battery yang mencapai EOL (soh < 80%). Battery eval cases yang menguji EOL detection (bat_004, bat_005) akan trivially pass dengan empty result.
+
+Fix: regenerate dengan rate lebih tinggi. 5 baterai (B1–B5) kini mencapai EOL dengan jelas:
+- B1: EOL cycle ~262, B2: ~187, B3: ~322, B4: ~224, B5: ~296
+- 1.810 baris, ~156 KB (lebih kecil dari sebelumnya karena max cycles diperpendek)
+
+**Fix test case referencing B7 (tidak ada di demo.db)**
+
+- `bat_005`: "B7" → "B3"
+- `bat_013`: "B7" → "B3"
+
+**Tambah 6 hard battery cases (`bat_016`–`bat_021`)**
+
+Coverage yang ditambah: HAVING, ranking by computed expression, filter+group-by, computed column, window function (LAG), percentage via CASE WHEN.
+
+| ID | Skill yang diuji |
+|----|-----------------|
+| bat_016 | `HAVING AVG(soh) > 85` — HAVING clause |
+| bat_017 | `ORDER BY (MAX-MIN) DESC LIMIT 1` — ranking by computed expression |
+| bat_018 | `WHERE soh > 90 GROUP BY` — filter + group-by |
+| bat_019 | `AVG(discharge - charge)` — computed column in aggregate |
+| bat_020 | `LAG() OVER (PARTITION BY ORDER BY)` — window function |
+| bat_021 | `SUM(CASE WHEN...) / COUNT(*)` — percentage via CASE |
+
+Semua SQL diverifikasi terhadap demo.db sebelum di-commit.
+
+**Tambah 5 hard ecommerce cases (`eco_013`–`eco_017`)**
+
+| ID | Skill yang diuji |
+|----|-----------------|
+| eco_013 | `NOT IN (subquery)` — anti-join / customers tanpa order |
+| eco_014 | 3-table JOIN + ranking + `LIMIT 5` (order_matters: true) |
+| eco_015 | 3-table JOIN + `HAVING SUM(...) > 10000` |
+| eco_016 | Nested subquery — avg items per completed order |
+| eco_017 | 3-table JOIN + `COUNT(DISTINCT)` per customer |
+
+**Update README `## Eval Harness`**
+
+- Update case count: 15→21 (battery), 12→17 (ecommerce)
+- Tambah kolom "Tags covered" di tabel test cases
+- Tambah "Latest eval results" tabel — placeholder siap diisi setelah eval dijalankan
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `data/demo.db` | Regenerate — rate degradasi baru, semua battery kini punya EOL |
+| `eval/cases/battery.jsonl` | Fix bat_005/bat_013 (B7→B3); tambah bat_016–021 |
+| `eval/cases/ecommerce.jsonl` | Tambah eco_013–017 |
+| `README.md` | Update case count + eval results table |
+
+---
+
+## 2026-06-10 — Session 11: CI GitHub Actions
+
+### Yang dikerjakan
+
+**CI: `pytest` otomatis tiap push ke `main`**
+
+Buat `.github/workflows/tests.yml` — workflow minimal yang:
+- Trigger: `push` dan `pull_request` ke branch `main`
+- Runner: `ubuntu-latest`, Python 3.12
+- Steps: `actions/checkout@v4` → `actions/setup-python@v5` → `pip install -r requirements.txt` → `pytest tests/ -v`
+- Hanya `tests/` yang dijalankan di CI (unit tests murni, tidak butuh API key). Eval harness (`eval/run_eval.py`) tidak masuk CI karena butuh `MINIMAX_API_KEY`.
+
+Tambah badge status CI di baris pertama `README.md`:
+```
+[![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](...)
+```
+
+Badge akan hijau setelah push pertama berhasil dan workflow jalan.
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `.github/workflows/tests.yml` | File baru — CI workflow |
+| `README.md` | Tambah badge CI di baris pertama |
+
+---
+
 ## 2026-06-09 — Session 10: Deploy Blockers + Test Fixes
 
 ### Yang dikerjakan

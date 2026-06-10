@@ -1,5 +1,7 @@
 # Universal SQL Agent
 
+[![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml)
+
 An LLM-powered CLI agent that answers natural language questions about any SQLite database. The agent generates SQL, executes it, optionally searches the web for external context, and replies in clean formatted text.
 
 Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strategy, SQL self-correction, and per-session JSONL observability logs. Comes with a **Streamlit dashboard** for chat, data exploration, and session analytics.
@@ -253,16 +255,27 @@ python eval/run_eval.py --db data/battery.db --domain battery --output results.j
 
 ### Test cases
 
-| File | Domain | Cases |
-|---|---|---|
-| `eval/cases/battery.jsonl` | Li-ion battery degradation | 15 |
-| `eval/cases/ecommerce.jsonl` | E-commerce / retail | 12 |
+| File | Domain | Cases | Tags covered |
+|---|---|---|---|
+| `eval/cases/battery.jsonl` | Li-ion battery degradation | 21 | count, filter, eol, aggregation, group-by, ranking, having, window-function, computed, percentage |
+| `eval/cases/ecommerce.jsonl` | E-commerce / retail | 17 | count, filter, join, aggregation, revenue, ranking, time-series, having, subquery, customer-behavior |
 
 To add a new case, append a line to the relevant `.jsonl` file:
 
 ```jsonl
-{"id": "bat_016", "question": "...", "expected_sql": "SELECT ...", "tags": ["filter"]}
+{"id": "bat_022", "question": "...", "expected_sql": "SELECT ...", "tags": ["filter"]}
 ```
+
+Add `"order_matters": true` when the test explicitly checks row ordering.
+
+### Latest eval results
+
+> Run `python eval/run_eval.py --db data/demo.db --domain battery` to generate fresh results.
+
+| Dataset | Model | Cases | Pass | Accuracy |
+|---------|-------|-------|------|----------|
+| battery (demo.db) | MiniMax-M2.7 | 21 | — | *run eval* |
+| ecommerce | MiniMax-M2.7 | 17 | — | *requires ecommerce.db* |
 
 ---
 
