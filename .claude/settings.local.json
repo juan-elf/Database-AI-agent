@@ -19,6 +19,9 @@
       "Bash(dir \"D:\\\\universal-sql-agent\\\\data\")",
       "Bash(python -c ' *)",
       "Bash(git check-ignore *)"
+    ],
+    "additionalDirectories": [
+      "d:\\universal-sql-agent"
     ]
   }
 }

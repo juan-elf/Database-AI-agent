@@ -155,6 +155,53 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Dark mode CSS (injected on toggle) ────────────────────────────────────────
+_DARK_CSS = """
+<style>
+.stApp {
+    background: linear-gradient(135deg, #0D0D1A 0%, #141428 50%, #0F1A2E 100%) !important;
+}
+[data-testid="stSidebar"] {
+    background: #13131F !important;
+    border-right: 1px solid #252538 !important;
+    box-shadow: 3px 0 20px rgba(0,0,0,0.3) !important;
+}
+[data-testid="stSidebar"] .stButton > button {
+    color: #9090B0 !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #2A2A4A !important;
+    color: #AA99FF !important;
+}
+[data-testid="stPlotlyChart"] { background: #1C1C2E !important; }
+[data-testid="stDataFrame"]   { background: #1C1C2E !important; }
+[data-testid="stExpander"]    {
+    background: #1C1C2E !important;
+    border-color: #252538 !important;
+}
+.kpi    { background: #1C1C2E !important; }
+.s-card { background: #1C1C2E !important; }
+.kpi-val  { color: #E0E0FF !important; }
+.kpi-lbl  { color: #5858A0 !important; }
+.s-title  { color: #E0E0FF !important; }
+.s-sub    { color: #5858A0 !important; }
+.pg-title { color: #E0E0FF !important; }
+.pg-sub   { color: #6060A0 !important; }
+.pg-badge { background: #1C1C2E !important; color: #7070A0 !important; }
+[data-testid="stChatMessage"] { background: #1C1C2E !important; }
+.stMarkdown p, .stMarkdown li,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: #D0D0F0 !important; }
+::-webkit-scrollbar-track { background: #1C1C2E; }
+::-webkit-scrollbar-thumb { background: #3A3A5E; }
+</style>
+"""
+
+if "dark" not in st.session_state:
+    st.session_state.dark = False
+
+if st.session_state.dark:
+    st.markdown(_DARK_CSS, unsafe_allow_html=True)
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_db_files():
@@ -303,19 +350,27 @@ def page_header(title: str, subtitle: str):
 
 COLORS = ["#7C5CFC", "#5B8CFF", "#22C55E", "#FF7043", "#FF9800", "#EC4899"]
 
-_BASE_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    margin=dict(l=8, r=8, t=38, b=8),
-    font=dict(family="Segoe UI, Inter, sans-serif", size=12, color="#666"),
-    xaxis=dict(gridcolor="#F0F0F8", linecolor="#F0F0F8", zeroline=False),
-    yaxis=dict(gridcolor="#F0F0F8", linecolor="#F0F0F8", zeroline=False),
-    legend=dict(orientation="h", yanchor="bottom", y=-0.28, xanchor="center", x=0.5),
-)
+def _layout():
+    dark = st.session_state.get("dark", False)
+    return dict(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=8, r=8, t=38, b=8),
+        font=dict(family="Segoe UI, Inter, sans-serif", size=12,
+                  color="#AAAACC" if dark else "#666"),
+        xaxis=dict(gridcolor="#2A2A4E" if dark else "#F0F0F8",
+                   linecolor="#2A2A4E" if dark else "#F0F0F8", zeroline=False),
+        yaxis=dict(gridcolor="#2A2A4E" if dark else "#F0F0F8",
+                   linecolor="#2A2A4E" if dark else "#F0F0F8", zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.28, xanchor="center", x=0.5),
+    )
 
 def fmt(fig, title="", h=280):
+    dark = st.session_state.get("dark", False)
     fig.update_layout(
-        title=dict(text=title, font=dict(size=14, color="#1A1A2E", weight=700), x=0),
-        height=h, **_BASE_LAYOUT,
+        title=dict(text=title,
+                   font=dict(size=14, color="#E0E0FF" if dark else "#1A1A2E", weight=700),
+                   x=0),
+        height=h, **_layout(),
     )
     return fig
 
@@ -423,6 +478,15 @@ with st.sidebar:
             <div style="font-size:28px;margin-bottom:8px;">🚀</div>
             <div style="font-size:12px;color:#7C5CFC;font-weight:600;">Pilih database &<br>inisialisasi agent</div>
         </div>""", unsafe_allow_html=True)
+
+    # ── Theme toggle ──────────────────────────────────────────────────────────
+    st.divider()
+    is_dark  = st.session_state.get("dark", False)
+    tog_icon  = "☀️" if is_dark else "🌙"
+    tog_label = f"{tog_icon}  Light Mode" if is_dark else f"{tog_icon}  Dark Mode"
+    if st.button(tog_label, use_container_width=True, key="theme_btn"):
+        st.session_state.dark = not is_dark
+        st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
