@@ -35,7 +35,7 @@ def get_database_path() -> Path:
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(get_database_path())
+    conn = sqlite3.connect(get_database_path().as_uri() + "?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 

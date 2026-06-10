@@ -2,6 +2,7 @@
 dashboard.py — Universal SQL Agent Dashboard (Redesigned)
 """
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -18,6 +19,25 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 DATA_DIR  = PROJECT_ROOT / "data"
 LOGS_DIR  = PROJECT_ROOT / "logs"
+
+
+def _inject_secrets() -> None:
+    """On Streamlit Cloud, read st.secrets and inject into os.environ.
+
+    agent.py reads keys via os.getenv() after load_dotenv(). Injecting
+    here (before any agent import) makes cloud secrets visible to agent.py
+    without modifying agent.py at all. No-op when running locally with .env.
+    """
+    try:
+        secrets = st.secrets
+        for key in ("MINIMAX_API_KEY", "TAVILY_API_KEY"):
+            if not os.environ.get(key) and key in secrets:
+                os.environ[key] = secrets[key]
+    except Exception:
+        pass
+
+
+_inject_secrets()
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(

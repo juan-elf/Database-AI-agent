@@ -11,7 +11,14 @@
       "PowerShell(d:\\\\universal-sql-agent\\\\.venv\\\\Scripts\\\\python.exe -c \"import streamlit, plotly, pandas; print\\('All OK - streamlit:', streamlit.__version__, '| plotly:', plotly.__version__, '| pandas:', pandas.__version__\\)\")",
       "Bash(cat requirements.txt)",
       "Bash(find . -name \"*test*\" -not -path \"*/.venv/*\" -not -path \"*/.git/*\")",
-      "Bash(.venv/Scripts/pip freeze *)"
+      "Bash(.venv/Scripts/pip freeze *)",
+      "Bash(.venv/Scripts/python eval/run_eval.py --db data/battery.db --domain battery --dry-run)",
+      "Bash(.venv/Scripts/pytest tests/test_database.py -v)",
+      "Bash(find eval *)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(dir \"D:\\\\universal-sql-agent\\\\data\")",
+      "Bash(python -c ' *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

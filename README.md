@@ -214,6 +214,58 @@ Get-Content logs\session_*.jsonl | ConvertFrom-Json | Where-Object event -eq 'to
 
 ---
 
+## Eval Harness
+
+Automated accuracy evaluation for the agent. Runs natural-language test cases, captures the SQL results the agent produces, and compares them to ground-truth results from a reference SQL query.
+
+```powershell
+# Validate all expected SQL (no API calls)
+python eval/run_eval.py --db data/battery.db --domain battery --dry-run
+
+# Full eval run
+python eval/run_eval.py --db data/battery.db --domain battery
+
+# Filter by tag
+python eval/run_eval.py --db data/battery.db --domain battery --tags eol,filter
+
+# Custom numeric tolerance (default 1%)
+python eval/run_eval.py --db data/battery.db --domain battery --tolerance 0.02
+
+# Save results to JSON
+python eval/run_eval.py --db data/battery.db --domain battery --output results.json
+```
+
+### How it works
+
+1. Each test case has a `question` (sent to the agent) and an `expected_sql` (ground-truth reference)
+2. The harness executes `expected_sql` directly to get the expected rows
+3. The agent is run with the question; its SQL tool calls are intercepted
+4. The agent's last successful SQL result is compared to the expected rows by **value** (column names are ignored, floats are compared within tolerance)
+5. Results are reported per case and aggregated by tag
+
+### Metrics reported
+
+| Metric | Description |
+|---|---|
+| Pass rate | % cases where agent result matches expected |
+| Accuracy by tag | Pass rate broken down by query category |
+| SQL attempts | How many SQL calls the agent made per case (retries visible) |
+
+### Test cases
+
+| File | Domain | Cases |
+|---|---|---|
+| `eval/cases/battery.jsonl` | Li-ion battery degradation | 15 |
+| `eval/cases/ecommerce.jsonl` | E-commerce / retail | 12 |
+
+To add a new case, append a line to the relevant `.jsonl` file:
+
+```jsonl
+{"id": "bat_016", "question": "...", "expected_sql": "SELECT ...", "tags": ["filter"]}
+```
+
+---
+
 ## Agent Configuration
 
 Key constants in `agent.py`:
@@ -246,6 +298,19 @@ Key constants in `agent.py`:
 
 ---
 
+## Known Limitations
+
+| Area | Limitation | Status |
+|------|-----------|--------|
+| **Database** | SQLite-only. No PostgreSQL/MySQL support yet. | Planned (Fase 2) |
+| **Context growth** | Conversation history is unbounded — very long sessions will eventually hit the model's context limit. | Planned fix |
+| **Schema injection** | Full schema is injected into every system prompt as raw text. Not scalable past ~20 tables. | Planned: replace with auto-profiling summary |
+| **SQL dialect** | Prompt and domain packs are tuned for SQLite syntax (`strftime`, `sqlite_master`). Porting to Postgres requires prompt edits. | Tracked in roadmap |
+| **Write operations** | Read-only by design (SQLite `mode=ro` + keyword whitelist). No INSERT/UPDATE path. | Intentional — see roadmap for safe write architecture |
+| **Multi-tenancy** | Single database per session. No row-level security or multi-user isolation. | Out of scope for v1 |
+
+---
+
 ## Folder Structure
 
 ```
@@ -266,7 +331,8 @@ universal-sql-agent/
 │   ├── battery.md          # domain pack: Li-ion battery research
 │   └── ecommerce.md        # domain pack: e-commerce / retail
 ├── data/
-│   └── *.db                # SQLite databases (gitignored)
+│   ├── demo.db             # bundled demo database (committed)
+│   └── *.db                # other databases (gitignored)
 └── logs/
     └── session_*.jsonl     # session logs (gitignored)
 ```

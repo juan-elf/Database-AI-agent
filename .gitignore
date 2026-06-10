@@ -4,7 +4,7 @@ venv/
 __pycache__/
 *.pyc
 *.db
+!data/demo.db
 .vscode/
 logs/
-data/
-*.csv
+data/*.csv
