@@ -270,12 +270,31 @@ Add `"order_matters": true` when the test explicitly checks row ordering.
 
 ### Latest eval results
 
-> Run `python eval/run_eval.py --db data/demo.db --domain battery` to generate fresh results.
+> Measured on `data/demo.db`. Run `python eval/run_eval.py --db data/demo.db --domain battery --output eval/results_battery.json` to refresh.
 
-| Dataset | Model | Cases | Pass | Accuracy |
-|---------|-------|-------|------|----------|
-| battery (demo.db) | MiniMax-M2.7 | 21 | — | *run eval* |
-| ecommerce | MiniMax-M2.7 | 17 | — | *requires ecommerce.db* |
+| Dataset | Model | Cases | Pass | Accuracy | Date |
+|---------|-------|-------|------|----------|------|
+| battery (demo.db) | MiniMax-M2.7 | 21 | 14 | **66.7%** | 2026-06-10 |
+| ecommerce | MiniMax-M2.7 | 17 | — | *requires ecommerce.db* | — |
+
+**Accuracy by tag (battery baseline):**
+
+| Tag | Accuracy | Tag | Accuracy |
+|-----|----------|-----|----------|
+| count | 100% | group-by | 83% |
+| subquery | 100% | aggregation | 73% |
+| having | 100% | filter | 50% |
+| temperature | 100% | eol | 33% |
+| percentage | 100% | ranking | 0% |
+| degradation | 100% | window-function | 0% |
+
+**Failure patterns identified:**
+
+| Pattern | Cases | Description |
+|---------|-------|-------------|
+| Extra columns | bat_003, bat_004, bat_005, bat_013 | Agent adds unrequested context columns (battery_id, soh, cycle) |
+| Missing LIMIT | bat_008, bat_017 | Ranking queries return all rows instead of top-1 |
+| Sign/polarity | bat_020 | "Largest drop" returned as positive vs expected negative |
 
 ---
 

@@ -28,20 +28,20 @@ dan jalur menuju production. Disusun 2026-06-09.
 
 ## Fixes tertunda dari review (kerjakan dulu — murah, dampak tinggi)
 
-- [ ] **🔴 Bug order-dependent di `compare_rows`** — `eval/run_eval.py:147` membandingkan baris
+- [x] **🔴 Bug order-dependent di `compare_rows`** — `eval/run_eval.py:147` membandingkan baris
   per posisi (`zip`). Kalau urutan baris agent ≠ expected (mis. tanpa `ORDER BY`), hasil benar
   dilaporkan `FAIL`. Fix: sort kedua sisi sebelum compare, atau flag `order_matters` per-case
   (default false).
-- [ ] **Section "Known Limitations" di README** — sebutkan: SQLite-only (saat ini), history
+- [x] **Section "Known Limitations" di README** — sebutkan: SQLite-only (saat ini), history
   unbounded, schema injection belum scalable. Menunjukkan kesadaran batasan sistem = nilai plus.
-- [ ] **Read-only via engine** — saat masih SQLite: buka koneksi `mode=ro`. Saat sudah Postgres:
+- [x] **Read-only via engine** — saat masih SQLite: buka koneksi `mode=ro`. Saat sudah Postgres:
   role read-only (`GRANT SELECT` saja). Ganti narasi keamanan dari "blacklist keyword" jadi
   "engine-level read-only + app validation".
-- [ ] **Perluas coverage eval** — tambah 5–8 case "hard" (multi-JOIN, window function, pertanyaan
+- [x] **Perluas coverage eval** — tambah 5–8 case "hard" (multi-JOIN, window function, pertanyaan
   ambigu). Coverage sekarang miring ke `count`/`basic`/`aggregation`.
-- [ ] **Test untuk `agent.py` & `tools.py`** — mock `client`, verifikasi MAX_ITERATIONS,
+- [x] **Test untuk `agent.py` & `tools.py`** — mock `client`, verifikasi MAX_ITERATIONS,
   handling tool_calls, retry. Logika paling agentic belum tertest.
-- [ ] **CI (GitHub Actions)** — jalankan `pytest` tiap push → badge hijau di README.
+- [x] **CI (GitHub Actions)** — jalankan `pytest` tiap push → badge hijau di README.
   (Eval butuh API key, tidak bisa di CI; pytest bisa.)
 
 ---
@@ -52,13 +52,13 @@ dan jalur menuju production. Disusun 2026-06-09.
 
 Deploy `dashboard.py` ke Streamlit Community Cloud.
 
-- [ ] **🔴 Sediakan demo DB di environment deploy.** `.gitignore` meng-ignore `data/` & `*.db`,
+- [x] **🔴 Sediakan demo DB di environment deploy.** `.gitignore` meng-ignore `data/` & `*.db`,
   jadi deploy tidak punya database → crash. Commit satu `.db` kecil (un-ignore khusus, mis.
   `!data/demo.db`).
-- [ ] **Secrets, bukan `.env`.** Streamlit Cloud pakai `st.secrets` (TOML di dashboard UI).
+- [x] **Secrets, bukan `.env`.** Streamlit Cloud pakai `st.secrets` (TOML di dashboard UI).
   Tambah pola fallback `os.getenv("X") or st.secrets.get("X")` supaya jalan di lokal + cloud.
   Masukkan `MINIMAX_API_KEY`, `TAVILY_API_KEY` ke secrets UI.
-- [ ] Connect repo di share.streamlit.io → pilih `dashboard.py` → isi secrets → live.
+- [x] Connect repo di share.streamlit.io → pilih `dashboard.py` → isi secrets → live.
 - [ ] Taruh URL demo di README + CV.
 
 ### Fase 2 — Supabase Postgres (upgrade, setelah live)
@@ -81,15 +81,15 @@ Deploy `dashboard.py` ke Streamlit Community Cloud.
 
 Mengubah agent dari *text-to-SQL* jadi *analis*.
 
-- [ ] **🌟 #1 — Tool eksekusi Python/pandas (sandboxed).** Analisis yang sulit di SQL: korelasi,
+- [x] **🌟 #1 — Tool eksekusi Python/pandas (sandboxed).** Analisis yang sulit di SQL: korelasi,
   regresi, deteksi anomali (z-score), distribusi, forecasting. Jalankan pandas **di atas hasil
   SQL**. Kunci: **sandbox** — jangan `exec()` mentah; batasi ke operasi pada DataFrame hasil atau
   subprocess dengan resource limit. → Fitur paling impresif untuk portfolio Data/ML.
-- [ ] **🌟 #2 — Auto data-profiling / data dictionary.** Saat DB connect, profil tiap tabel sekali
+- [x] **🌟 #2 — Auto data-profiling / data dictionary.** Saat DB connect, profil tiap tabel sekali
   (row count, null %, distinct count, min/max, tipe semantik, relasi). Cache + suntik ke prompt.
   → Wujudkan visi "spesialis untuk data terpasang" + sekaligus fix masalah schema-injection yang
   tidak scalable (kirim profil ringkas, bukan dump mentah).
-- [ ] **#3 — Publish akurasi eval di README** (mis. "akurasi 87% pada 35 test case"). Bukti
+- [x] **#3 — Publish akurasi eval di README** (mis. "akurasi 87% pada 35 test case"). Bukti
   kuantitatif yang dipercaya recruiter Data/ML.
 
 ### Production signals (tier 2, opsional)

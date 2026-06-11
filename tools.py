@@ -9,6 +9,7 @@ Tool definitions for Universal SQL Agent.
 import json
 from database import execute_query, get_distinct_values
 from web_search import search_web
+from analysis import run_analysis as _run_analysis_fn
 
 
 TOOLS_SCHEMA = [
@@ -57,6 +58,40 @@ TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "run_analysis",
+            "description": (
+                "Execute Python/pandas code on the result of a SQL query. "
+                "USE FOR analysis that is hard or impossible in SQL: "
+                "correlation, z-score anomaly detection, statistical distribution, "
+                "linear trend, percentile breakdown. "
+                "DO NOT use for simple aggregation — execute_sql is faster for that. "
+                "The code runs on a DataFrame named `df` (from the SQL result). "
+                "Available: pd (pandas), np (numpy), stats (scipy.stats if installed). "
+                "Code MUST assign output to `result`."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sql": {
+                        "type": "string",
+                        "description": "SELECT query whose result becomes DataFrame `df`."
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": (
+                            "Python code that analyzes `df` and assigns to `result`. "
+                            "Example: result = {'corr': float(df['cycle'].corr(df['soh'])), "
+                            "'mean_soh': float(df['soh'].mean())}"
+                        )
+                    }
+                },
+                "required": ["sql", "code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "web_search",
             "description": (
                 "Search the internet for information. USE THIS ONLY WHEN: "
@@ -85,6 +120,11 @@ TOOLS_SCHEMA = [
 ]
 
 
+def _run_analysis_tool(sql: str, code: str) -> str:
+    result = _run_analysis_fn(sql, code)
+    return json.dumps(result, ensure_ascii=False, default=str)
+
+
 def _execute_sql_tool(sql: str) -> str:
     result = execute_query(sql)
     if result["success"] and result["row_count"] > 50:
@@ -110,9 +150,10 @@ def _web_search_tool(query: str, max_results: int = 5) -> str:
 
 
 TOOL_FUNCTIONS = {
-    "execute_sql": _execute_sql_tool,
+    "execute_sql":        _execute_sql_tool,
     "get_distinct_values": _get_distinct_values_tool,
-    "web_search": _web_search_tool,
+    "web_search":         _web_search_tool,
+    "run_analysis":       _run_analysis_tool,
 }
 
 

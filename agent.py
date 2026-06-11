@@ -19,6 +19,7 @@ from database import get_schema, get_database_path
 from tools import TOOLS_SCHEMA, call_tool
 from logger import ConversationLogger
 from web_search import is_available as web_available
+from profiler import profile_database, format_profile_for_prompt
 import ui
 
 load_dotenv()
@@ -65,6 +66,9 @@ AVAILABLE TOOLS:
 ═══════════════════════════════════════════════════════════════
 - execute_sql: run a SELECT query (primary tool for all data questions)
 - get_distinct_values: check unique values in a categorical column
+- run_analysis: execute Python/pandas code on SQL results — USE FOR analysis \
+that is hard in SQL: correlation, z-score anomaly detection, distribution stats, \
+linear trend. NOT for simple aggregation (use execute_sql instead).
 - web_search: search external info — use ONLY when (a) data is not in the database, \
 OR (b) external context is needed (definitions, benchmarks, industry standards)
 
@@ -101,11 +105,18 @@ def build_system_prompt(domain_name: str | None = None) -> str:
     Build the layered system prompt:
     1. Generic instructions (always)
     2. Database schema (auto-detected)
-    3. Domain pack (optional)
+    3. Data profile (row counts, ranges, cardinality — cached)
+    4. Domain pack (optional)
     """
     schema = get_schema()
     db_path = get_database_path()
     web_status = "ACTIVE" if web_available() else "INACTIVE"
+
+    try:
+        profile = profile_database()
+        profile_text = format_profile_for_prompt(profile)
+    except Exception:
+        profile_text = "(Data profile unavailable)"
 
     parts = [
         GENERIC_INSTRUCTIONS,
@@ -114,6 +125,10 @@ def build_system_prompt(domain_name: str | None = None) -> str:
         f"DATABASE: {db_path.name}",
         "═══════════════════════════════════════════════════════════════",
         schema,
+        "\n═══════════════════════════════════════════════════════════════",
+        "DATA PROFILE  (cached once — row counts, ranges, cardinality)",
+        "═══════════════════════════════════════════════════════════════",
+        profile_text,
     ]
 
     if domain_name:

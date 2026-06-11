@@ -21,7 +21,7 @@ _db_path: Path | None = None
 def set_database(path: str | Path) -> None:
     """Set the active database. Called once at startup from main.py."""
     global _db_path
-    p = Path(path)
+    p = Path(path).resolve()
     if not p.exists():
         raise FileNotFoundError(f"Database not found: {p}")
     _db_path = p
