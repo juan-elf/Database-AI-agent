@@ -71,6 +71,49 @@ def get_database_path() -> Path:
 
 # ── Connection ────────────────────────────────────────────────────────────────
 
+def _parse_connection_url(url: str) -> dict:
+    """
+    Parse postgresql://user:pass@host:port/db into psycopg2 kwargs.
+
+    Uses rfind('@') instead of urlparse so passwords containing '@', '[', ']'
+    or other special characters work without URL-encoding. Also strips
+    accidental bracket-wrapping of the password (common copy-paste from
+    Supabase dashboard which shows [YOUR-PASSWORD]).
+    """
+    url = url.strip()
+    url = re.sub(r'^postgres(?:ql)?://', '', url)
+
+    at_idx = url.rfind('@')
+    if at_idx == -1:
+        raise ValueError("Invalid DATABASE_URL: missing '@' separator")
+
+    credentials = url[:at_idx]
+    host_part   = url[at_idx + 1:]
+
+    colon_idx = credentials.find(':')
+    if colon_idx == -1:
+        raise ValueError("Invalid DATABASE_URL: missing ':' in credentials")
+
+    user     = credentials[:colon_idx]
+    password = credentials[colon_idx + 1:]
+
+    # Strip accidental brackets e.g. [YOUR-PASSWORD] → YOUR-PASSWORD
+    if password.startswith('[') and password.endswith(']'):
+        password = password[1:-1]
+
+    m = re.match(r'([^:/]+):(\d+)/([^?]+)', host_part)
+    if not m:
+        raise ValueError(f"Invalid DATABASE_URL host section: {host_part!r}")
+
+    return {
+        "host":   m.group(1),
+        "port":   int(m.group(2)),
+        "dbname": m.group(3),
+        "user":   user,
+        "password": password,
+    }
+
+
 def get_connection():
     """Return a read-only DB connection for the active engine."""
     if _use_postgres():
@@ -78,7 +121,8 @@ def get_connection():
             raise RuntimeError(
                 "psycopg2 not installed. Run: pip install psycopg2-binary"
             )
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        kwargs = _parse_connection_url(os.environ["DATABASE_URL"])
+        conn = psycopg2.connect(**kwargs)
         conn.set_session(readonly=True, autocommit=True)
         return conn
     conn = sqlite3.connect(get_database_path().as_uri() + "?mode=ro", uri=True)

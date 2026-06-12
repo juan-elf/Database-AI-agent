@@ -68,11 +68,11 @@ Deploy `dashboard.py` ke Streamlit Community Cloud.
 - Schema introspection pakai `PRAGMA`/`sqlite_master` (`database.py:67`) → `information_schema`.
 - **Eval cases (`expected_sql`) ikut harus ditulis ulang** ke dialek Postgres.
 
-- [ ] Buat **abstraksi DB** — CLI tetap SQLite lokal, dashboard pakai Postgres.
-- [ ] Migrasi schema introspection ke `information_schema`.
-- [ ] Update prompt + domain packs ke dialek Postgres.
-- [ ] Buat **role read-only** di Supabase (`GRANT SELECT` saja) untuk koneksi agent.
-- [ ] Pakai **connection pooler** Supabase (port 6543), bukan direct (5432).
+- [x] Buat **abstraksi DB** — CLI tetap SQLite lokal, dashboard pakai Postgres.
+- [x] Migrasi schema introspection ke `information_schema`.
+- [x] Update prompt + domain packs ke dialek Postgres.
+- [x] Buat **role read-only** di Supabase (`GRANT SELECT` saja) untuk koneksi agent.
+- [x] Pakai **connection pooler** Supabase (Session pooler port 5432) — konek berhasil.
 - [ ] ⚠️ `service_role` key hanya server-side; jangan pernah di client.
 
 ---

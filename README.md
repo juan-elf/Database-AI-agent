@@ -1,20 +1,25 @@
 # Universal SQL Agent
 
 [![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?logo=streamlit)](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)
 
-An LLM-powered CLI agent that answers natural language questions about any SQLite database. The agent generates SQL, executes it, optionally searches the web for external context, and replies in clean formatted text.
+**[Try the live demo →](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)**
 
-Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strategy, SQL self-correction, and per-session JSONL observability logs. Comes with a **Streamlit dashboard** for chat, data exploration, and session analytics.
+An LLM-powered agent that answers natural language questions about any SQLite or PostgreSQL database. The agent generates SQL, executes it, optionally searches the web for external context, and replies in clean formatted text.
+
+Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web search strategy, SQL self-correction, auto data-profiling, sandboxed pandas analysis, and per-session JSONL observability logs. Comes with a **Streamlit dashboard** for chat, data exploration, and session analytics.
 
 ---
 
 ## Features
 
-- **Talk to any SQLite database** — point it at any `.db` file, no schema configuration needed
+- **Talk to any SQLite or PostgreSQL database** — point it at any `.db` file or Supabase connection string, no schema configuration needed
+- **Auto data-profiling** — on connect, profiles every table (row count, null %, distinct count, min/max, semantic type) and injects the summary into the system prompt
+- **Sandboxed pandas analysis** — `run_analysis` tool executes Python/pandas on SQL results for correlation, z-score anomaly detection, distribution stats — all sandboxed (no filesystem/network/subprocess access)
 - **Domain packs** — drop a `.md` file in `domains/` to give the agent specialist knowledge (glossary, query patterns, pitfalls)
 - **Hybrid knowledge** — database-first for internal data, Tavily web search for benchmarks, definitions, and external context
 - **Self-correcting** — query errors return a `hint` that the agent uses to fix and retry
-- **Safe by design** — only `SELECT`/`WITH` allowed; dangerous keywords blacklisted; multi-statement blocked; identifier validation
+- **Safe by design** — only `SELECT`/`WITH` allowed; engine-level read-only (`mode=ro` for SQLite, `GRANT SELECT` role for Postgres); multi-statement blocked; identifier validation
 - **Pretty CLI** — `rich`-based tables, syntax-highlighted SQL, web result panels, spinners, markdown rendering
 - **Observability** — every session logged to JSONL
 - **Auto-chart generation** — SQL results with numeric/time-series data are automatically visualized as charts in the dashboard chat
@@ -58,14 +63,16 @@ Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strat
 |---|---|
 | `main.py` | CLI entry point + interactive chat loop |
 | `agent.py` | Agent loop — call API → handle tool calls → loop until final answer |
-| `tools.py` | Tool schema & dispatcher (`execute_sql`, `get_distinct_values`, `web_search`) |
-| `database.py` | SQLite connection, query validation, error hints, schema introspection |
+| `tools.py` | Tool schema & dispatcher (`execute_sql`, `get_distinct_values`, `web_search`, `run_analysis`) |
+| `database.py` | Dual-engine DB layer — SQLite local / PostgreSQL (Supabase) in cloud; query validation, schema introspection |
+| `profiler.py` | Auto data-profiling — row counts, null %, cardinality, min/max; cached by file mtime or Postgres URL |
+| `analysis.py` | Sandboxed pandas executor — runs Python code on SQL DataFrames inside a restricted namespace |
 | `web_search.py` | Tavily API integration for external web search |
 | `ui.py` | All presentation logic (rich-based) — panels, tables, spinners, markdown |
 | `logger.py` | Per-session JSONL logger |
 | `dashboard.py` | Streamlit web dashboard — Chat, DB Explorer, Session History, Analytics |
 | `domains/` | Domain pack files (`*.md`) — specialist knowledge injected into the system prompt |
-| `data/` | SQLite database files (gitignored) |
+| `data/` | SQLite database files (gitignored, except `demo.db`) |
 | `logs/` | Per-session log files (gitignored) |
 
 ---
@@ -75,8 +82,9 @@ Built on **MiniMax** (OpenAI-compatible API) with a hybrid DB + web search strat
 ### 1. Prerequisites
 
 - Python 3.11+
-- MiniMax API key — [minimax.io](https://www.minimax.io/)
+- OpenRouter API key (free) — [openrouter.ai](https://openrouter.ai/)
 - *(Optional)* Tavily API key for web search — [tavily.com](https://tavily.com) (free tier: 1,000 searches/month)
+- *(Optional)* Supabase project for PostgreSQL cloud database — [supabase.com](https://supabase.com)
 
 ### 2. Install dependencies
 
@@ -89,8 +97,11 @@ pip install -r requirements.txt
 ### 3. Configure `.env`
 
 ```env
-MINIMAX_API_KEY=sk-your-key-here
+OPENROUTER_API_KEY=sk-or-your-key-here
 TAVILY_API_KEY=tvly-xxxxx        # optional — enables web search
+
+# Optional — if set, agent connects to Postgres instead of SQLite
+DATABASE_URL=postgresql://user:password@host:5432/dbname
 ```
 
 ---
@@ -275,7 +286,8 @@ Add `"order_matters": true` when the test explicitly checks row ordering.
 | Dataset | Model | Cases | Pass | Accuracy | Date |
 |---------|-------|-------|------|----------|------|
 | battery (demo.db) | MiniMax-M2.7 | 21 | 14 | **66.7%** | 2026-06-10 |
-| ecommerce | MiniMax-M2.7 | 17 | — | *requires ecommerce.db* | — |
+| battery (demo.db) | nvidia/nemotron-3-ultra (OpenRouter) | — | — | *pending re-run* | — |
+| ecommerce | — | 17 | — | *requires ecommerce.db* | — |
 
 **Accuracy by tag (battery baseline):**
 
@@ -304,7 +316,7 @@ Key constants in `agent.py`:
 
 | Constant | Default | Description |
 |---|---|---|
-| `MODEL_NAME` | `MiniMax-M2.7` | Model in use |
+| `MODEL_NAME` | `nvidia/nemotron-3-ultra-550b-a55b:free` | Model via OpenRouter (free tier) |
 | `MAX_ITERATIONS` | `10` | Max agent loop iterations per question |
 | `MAX_RETRIES` | `3` | API retries on transient errors |
 | `INITIAL_BACKOFF` | `2` | Initial backoff in seconds (exponential: 2s, 4s, 8s) |
@@ -313,8 +325,8 @@ Key constants in `agent.py`:
 
 ## Troubleshooting
 
-**`MINIMAX_API_KEY not found`**  
-→ Make sure `.env` exists in the project root and contains `MINIMAX_API_KEY=...`
+**`OPENROUTER_API_KEY not found`**  
+→ Make sure `.env` exists in the project root and contains `OPENROUTER_API_KEY=sk-or-...`. Get a free key at [openrouter.ai](https://openrouter.ai/).
 
 **`Database not found`**  
 → Check the path passed to `--db`. Run `python main.py --help` for usage.
@@ -334,11 +346,11 @@ Key constants in `agent.py`:
 
 | Area | Limitation | Status |
 |------|-----------|--------|
-| **Database** | SQLite-only. No PostgreSQL/MySQL support yet. | Planned (Fase 2) |
+| **Database** | SQLite (local) and PostgreSQL/Supabase (cloud) supported. MySQL/other dialects not yet supported. | MySQL planned |
 | **Context growth** | Conversation history is unbounded — very long sessions will eventually hit the model's context limit. | Planned fix |
-| **Schema injection** | Full schema is injected into every system prompt as raw text. Not scalable past ~20 tables. | Planned: replace with auto-profiling summary |
-| **SQL dialect** | Prompt and domain packs are tuned for SQLite syntax (`strftime`, `sqlite_master`). Porting to Postgres requires prompt edits. | Tracked in roadmap |
-| **Write operations** | Read-only by design (SQLite `mode=ro` + keyword whitelist). No INSERT/UPDATE path. | Intentional — see roadmap for safe write architecture |
+| **Schema injection** | Auto-profiler injects a compact summary (row counts, ranges, cardinality) instead of raw schema dump. Scalable to ~50 tables. | Implemented |
+| **SQL dialect** | Dialect rules (`_DIALECT_RULES`) injected dynamically based on detected engine (SQLite vs. Postgres). | Implemented |
+| **Write operations** | Read-only by design (engine-level: SQLite `mode=ro`, Postgres read-only role + `GRANT SELECT` only). No INSERT/UPDATE path. | Intentional — see roadmap for safe write architecture |
 | **Multi-tenancy** | Single database per session. No row-level security or multi-user isolation. | Out of scope for v1 |
 
 ---

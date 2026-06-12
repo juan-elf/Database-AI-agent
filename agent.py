@@ -24,7 +24,7 @@ import ui
 
 load_dotenv()
 
-MODEL_NAME = "MiniMax-M2.7"
+MODEL_NAME = "nvidia/nemotron-3-ultra-550b-a55b:free"
 MAX_ITERATIONS = 10
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 2
@@ -32,8 +32,8 @@ INITIAL_BACKOFF = 2
 DOMAINS_DIR = Path("domains")
 
 client = OpenAI(
-    api_key=os.getenv("MINIMAX_API_KEY"),
-    base_url="https://api.minimax.io/v1"
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1"
 )
 
 

@@ -2,6 +2,88 @@
 
 ---
 
+## 2026-06-12 — Session 19: Read-Only Role Supabase + README Update
+
+### Yang dikerjakan
+
+**Supabase read-only role** — setup selesai dan terverifikasi:
+1. `CREATE ROLE agent_readonly` + `GRANT SELECT ON ALL TABLES IN SCHEMA public`
+2. `CREATE USER agent_user` + `GRANT agent_readonly TO agent_user`
+3. Fix RLS: `ALTER TABLE battery_cycles DISABLE ROW LEVEL SECURITY` — Supabase aktifkan RLS by default, tanpa policy semua row diblokir untuk non-superuser
+4. Update `DATABASE_URL` dengan format `agent_user.project-ref@host` (Supabase Session pooler wajib pakai format ini untuk user non-`postgres`)
+
+**Verifikasi 3 lapis:**
+- Read berhasil: 1810 rows terbaca, data match dengan demo.db
+- Write blocked di DB level: `permission denied for table battery_cycles` (bukan cuma app-level validation)
+- Koneksi: `agent_user` via Session pooler port 5432
+
+**README** — diperbarui:
+- Tambah live demo badge + link: https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app
+- Deskripsi: SQLite + PostgreSQL dual-engine, OpenRouter, auto data-profiling, sandboxed analysis
+- Setup: `OPENROUTER_API_KEY` (ganti `MINIMAX_API_KEY`), tambah `DATABASE_URL` option
+- Known Limitations: update status SQLite-only, schema injection, SQL dialect (semua sudah diimplementasikan)
+- Model config: `nvidia/nemotron-3-ultra-550b-a55b:free`
+
+### Hasil
+- Supabase `agent_user` fully operational: read ✓, write blocked ✓
+- Fase 2 Supabase selesai
+
+---
+
+## 2026-06-12 — Session 18: Migrasi LLM ke OpenRouter
+
+### Yang dikerjakan
+
+**`agent.py`** — ganti LLM provider dari MiniMax ke OpenRouter:
+- `MODEL_NAME = "nvidia/nemotron-3-ultra-550b-a55b:free"` (model gratis)
+- `client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")` — OpenRouter kompatibel dengan OpenAI SDK
+- Hapus dependency MiniMax (tidak ada breaking change karena interface `client.chat.completions.create()` sama)
+
+**`dashboard.py`** — update `_inject_secrets()`: `MINIMAX_API_KEY` → `OPENROUTER_API_KEY`.
+
+**Streamlit Cloud secrets** — tambah `OPENROUTER_API_KEY`, hapus `MINIMAX_API_KEY`.
+
+### Hasil
+- Stack LLM sepenuhnya gratis (OpenRouter free tier)
+- 165 tests passed — LLM tidak di-test langsung (mock), tidak ada regresi
+
+---
+
+## 2026-06-12 — Session 17: Supabase Connect & Test Isolation
+
+### Yang dikerjakan
+
+**Koneksi Supabase berhasil.** Data `battery_cycles` (1,810 rows) di-import ke Supabase via `data/supabase_import.sql` (PostgreSQL-compatible dump, generated dari `demo.db`).
+
+**Bug fix `database.py` — `_parse_connection_url()`:**
+
+`psycopg2.connect(url)` dan Python 3.14's `urlparse` keduanya gagal parse URL yang passwordnya mengandung karakter `[` `]` (bracket dari template Supabase: `[YOUR-PASSWORD]`). Fix: custom URL parser menggunakan `rfind('@')` untuk memisahkan credentials dari host, plus auto-strip bracket dari password.
+
+```python
+def _parse_connection_url(url: str) -> dict:
+    # rfind('@') handles passwords containing '@', '[', ']'
+    at_idx = url.rfind('@')
+    credentials, host_part = url[:at_idx], url[at_idx+1:]
+    user, password = credentials.split(':', 1)
+    if password.startswith('[') and password.endswith(']'):
+        password = password[1:-1]   # strip accidental brackets
+    ...
+```
+
+**`dashboard.py`** — tambah `DATABASE_URL` ke daftar keys yang di-inject dari `st.secrets`.
+
+**`tests/conftest.py`** — baru, `autouse` fixture yang `delenv("DATABASE_URL")` sebelum setiap test. Tanpa ini, `DATABASE_URL` dari `.env` lokal bocor ke pytest dan semua tests coba konek ke Supabase (fail karena fixture pakai tmp SQLite DB).
+
+### Hasil
+- Engine `postgres` terdeteksi, schema `battery_cycles` terbaca dari Supabase
+- **165 tests passed** — SQLite path tidak berubah
+
+### Sisa Fase 2
+- [ ] Setup read-only role di Supabase (`CREATE ROLE agent_readonly; GRANT SELECT`)
+- [ ] Set `DATABASE_URL` di Streamlit Cloud secrets → test dashboard live di Postgres
+
+---
+
 ## 2026-06-12 — Session 16: Deployment Fase 2 — Dual Engine Foundation
 
 ### Yang dikerjakan
