@@ -2,6 +2,51 @@
 
 ---
 
+## 2026-06-12 — Session 16: Deployment Fase 2 — Dual Engine Foundation
+
+### Yang dikerjakan
+
+Fondasi untuk migrasi ke Supabase Postgres. Semua perubahan di-guard oleh `DATABASE_URL` env variable — kalau tidak di-set, behaviour SQLite identik seperti sebelumnya.
+
+**`requirements.txt`** — tambah `psycopg2-binary>=2.9.0`
+
+**`database.py`** — refactor besar: dual-engine (SQLite + PostgreSQL):
+- `_use_postgres()` / `get_db_engine()` — deteksi engine dari `DATABASE_URL` env
+- `get_db_label()` — human-readable DB identifier (filename untuk SQLite, `host/dbname` untuk Postgres)
+- `get_connection()`:
+  - SQLite: tetap `uri=True + ?mode=ro`
+  - Postgres: `psycopg2.connect(DATABASE_URL)` + `set_session(readonly=True, autocommit=True)`
+- `get_schema()` → branch ke `_get_schema_sqlite()` atau `_get_schema_postgres()`:
+  - SQLite: PRAGMA + sqlite_master (tidak berubah)
+  - Postgres: `information_schema.tables` + `information_schema.columns` + FK via `information_schema.table_constraints`
+- `get_table_names()` → branch ke sqlite_master atau information_schema
+- `execute_query()` → pakai `dict(zip(columns, row))` yang kompatibel kedua engine; exception ditangkap via `_DB_ERRORS` tuple `(sqlite3.Error, psycopg2.Error)`
+- `get_distinct_values()` → PRAGMA untuk SQLite, information_schema untuk Postgres; `LIMIT {limit}` literal (integer-validated) menggantikan placeholder `?` agar kompatibel keduanya
+- `_generate_error_hint()` → dialect-aware error message
+
+**`profiler.py`** — dual-engine:
+- `_cache_key()`: SQLite → `(path, mtime)`, Postgres → `("postgres", DATABASE_URL)`
+- `_get_table_names(conn)`: sqlite_master vs information_schema
+- `_get_column_meta(conn, table)`: PRAGMA vs information_schema.columns + `_pg_type_to_declared()` mapper
+- Stats queries (null %, distinct, min/max/mean) tidak berubah — SQL standard untuk kedua engine
+
+**`agent.py`** — dialect-aware system prompt:
+- Import `get_db_engine`, `get_db_label` (replace `get_database_path`)
+- `_DIALECT_RULES` dict — SQLite vs PostgreSQL specific hints (monthly grouping, date format, casting, ILIKE, dll)
+- `GENERIC_INSTRUCTIONS` — hapus rules SQLite-specific (rules 1-3 lama), ganti dengan rules universal saja
+- `build_system_prompt()` — inject `_DIALECT_RULES[dialect]` section + pakai `get_db_label()` sebagai identifier DB
+
+### Yang BELUM dilakukan (perlu Supabase ready)
+- Test end-to-end Postgres connection
+- Import data dari demo.db ke Supabase
+- Setup read-only role di Supabase (`GRANT SELECT`)
+- Test eval cases di Postgres dialect
+
+### Status test suite
+`165 passed` (137 non-agent + 28 agent) — semua hijau, SQLite path tidak berubah.
+
+---
+
 ## 2026-06-11 — Session 15: Auto Data-Profiling A.2
 
 ### Yang dikerjakan

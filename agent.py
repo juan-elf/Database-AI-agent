@@ -15,7 +15,7 @@ from typing import Any
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 from dotenv import load_dotenv
 
-from database import get_schema, get_database_path
+from database import get_schema, get_db_engine, get_db_label
 from tools import TOOLS_SCHEMA, call_tool
 from logger import ConversationLogger
 from web_search import is_available as web_available
@@ -86,31 +86,53 @@ SOURCE PRIORITY STRATEGY:
 ═══════════════════════════════════════════════════════════════
 GENERAL RULES:
 ═══════════════════════════════════════════════════════════════
-1. Use SQLite syntax (not PostgreSQL/MySQL).
-2. For monthly grouping: strftime('%Y-%m', date_column).
-3. Dates are stored as TEXT in ISO format (YYYY-MM-DD).
-4. For JOINs, use the foreign keys shown in the schema.
-5. If a query errors, READ the 'hint' field in the response and fix it.
+1. For JOINs, use the foreign keys shown in the schema.
+2. If a query errors, READ the 'hint' field in the response and fix it.
    NEVER retry the exact same failing query.
-6. If unsure about values in a categorical column, use get_distinct_values first.
-7. If the question is ambiguous, ask for clarification before querying.
-8. Reply in natural, informative Bahasa Indonesia.
-9. Use markdown formatting in answers (bold, lists, tables).
-10. Include UNITS on numeric results where relevant (Rp, °C, %, kg, etc.).
+3. If unsure about values in a categorical column, use get_distinct_values first.
+4. If the question is ambiguous, ask for clarification before querying.
+5. Reply in natural, informative Bahasa Indonesia.
+6. Use markdown formatting in answers (bold, lists, tables).
+7. Include UNITS on numeric results where relevant (Rp, °C, %, kg, etc.).
 """
+
+_DIALECT_RULES: dict[str, str] = {
+    "sqlite": (
+        "═══════════════════════════════════════════════════════════════\n"
+        "SQL DIALECT: SQLite\n"
+        "═══════════════════════════════════════════════════════════════\n"
+        "- Monthly grouping: strftime('%Y-%m', date_column)\n"
+        "- Dates stored as TEXT in ISO format (YYYY-MM-DD)\n"
+        "- String concat: || operator\n"
+        "- Window functions supported (LAG, LEAD, ROW_NUMBER, etc.)"
+    ),
+    "postgres": (
+        "═══════════════════════════════════════════════════════════════\n"
+        "SQL DIALECT: PostgreSQL (Supabase)\n"
+        "═══════════════════════════════════════════════════════════════\n"
+        "- Monthly grouping: to_char(date_col, 'YYYY-MM') "
+        "or DATE_TRUNC('month', date_col)\n"
+        "- Dates stored as DATE or TIMESTAMP\n"
+        "- String concat: || operator or CONCAT()\n"
+        "- Case-insensitive match: ILIKE\n"
+        "- Type casting: value::text, value::integer\n"
+        "- Window functions supported (LAG, LEAD, ROW_NUMBER, etc.)"
+    ),
+}
 
 
 def build_system_prompt(domain_name: str | None = None) -> str:
     """
     Build the layered system prompt:
-    1. Generic instructions (always)
+    1. Generic instructions + dialect-specific SQL rules
     2. Database schema (auto-detected)
     3. Data profile (row counts, ranges, cardinality — cached)
     4. Domain pack (optional)
     """
     schema = get_schema()
-    db_path = get_database_path()
+    db_label = get_db_label()
     web_status = "ACTIVE" if web_available() else "INACTIVE"
+    dialect = get_db_engine()
 
     try:
         profile = profile_database()
@@ -120,9 +142,10 @@ def build_system_prompt(domain_name: str | None = None) -> str:
 
     parts = [
         GENERIC_INSTRUCTIONS,
+        _DIALECT_RULES[dialect],
         f"\nWEB SEARCH STATUS: {web_status}\n",
         "═══════════════════════════════════════════════════════════════",
-        f"DATABASE: {db_path.name}",
+        f"DATABASE: {db_label}",
         "═══════════════════════════════════════════════════════════════",
         schema,
         "\n═══════════════════════════════════════════════════════════════",
@@ -192,8 +215,7 @@ class Agent:
         self.total_output_tokens = 0
 
         if self.verbose:
-            db_name = get_database_path().name
-            ui.dim(f"📂 Database: {db_name}")
+            ui.dim(f"📂 Database: {get_db_label()}")
             ui.dim(f"🎯 Domain pack: {domain or '(none — generic mode)'}")
             if web_available():
                 ui.dim("🌐 Web search: active (Tavily)")

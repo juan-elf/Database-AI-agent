@@ -1,22 +1,26 @@
 """
-Auto data-profiling for the active SQLite database.
+Auto data-profiling for the active database (SQLite or PostgreSQL).
 
-profile_database() runs once and caches results by (db_path, mtime).
+profile_database() runs once and caches results.
 Results are injected into the agent's system prompt so the model has
 row counts, value ranges, and cardinality without using tool calls.
 
+Cache key:
+  - SQLite:   (file_path, mtime)
+  - Postgres: (DATABASE_URL, ) — invalidated only on engine restart
+
 Design:
-- Uses get_connection() directly for PRAGMA queries (bypasses validate_query)
-- Numeric columns: min, max, mean
-- Categorical columns (distinct <= CATEGORICAL_THRESHOLD): sample values
-- Text columns (high cardinality): distinct count only
-- Tables > MAX_STAT_ROWS: row count only (column stats skipped)
+  - Uses get_connection() directly for metadata queries
+  - Numeric columns: min, max, mean
+  - Categorical columns (distinct <= CATEGORICAL_THRESHOLD): sample values
+  - Text columns (high cardinality): distinct count only
+  - Tables > MAX_STAT_ROWS: row count only (column stats skipped)
 """
-import sqlite3
+import os
 import time
 from typing import Any
 
-from database import get_connection, get_database_path
+from database import get_connection, get_db_engine, _use_postgres
 
 CATEGORICAL_THRESHOLD = 20
 MAX_STAT_ROWS = 100_000
@@ -24,11 +28,21 @@ MAX_STAT_ROWS = 100_000
 _cache: dict[tuple, dict] = {}
 
 
-def profile_database(force: bool = False) -> dict[str, Any]:
-    """Profile all tables in the active database. Cached by (path, mtime)."""
+# ── Cache key ─────────────────────────────────────────────────────────────────
+
+def _cache_key() -> tuple:
+    if _use_postgres():
+        return ("postgres", os.environ.get("DATABASE_URL", ""))
+    from database import get_database_path
     db_path = get_database_path()
-    mtime = db_path.stat().st_mtime
-    key = (str(db_path), mtime)
+    return (str(db_path), db_path.stat().st_mtime)
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def profile_database(force: bool = False) -> dict[str, Any]:
+    """Profile all tables. Cached; use force=True to regenerate."""
+    key = _cache_key()
     if not force and key in _cache:
         return _cache[key]
     profile = _build_profile()
@@ -36,17 +50,12 @@ def profile_database(force: bool = False) -> dict[str, Any]:
     return profile
 
 
+# ── Build ─────────────────────────────────────────────────────────────────────
+
 def _build_profile() -> dict[str, Any]:
     conn = get_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name NOT LIKE 'sqlite_%'
-            ORDER BY name
-        """)
-        tables = [row[0] for row in cursor.fetchall()]
-
+        tables = _get_table_names(conn)
         profile: dict[str, Any] = {"tables": {}, "generated_at": time.time()}
         for table in tables:
             profile["tables"][table] = _profile_table(conn, table)
@@ -55,20 +64,66 @@ def _build_profile() -> dict[str, Any]:
         conn.close()
 
 
-def _profile_table(conn: sqlite3.Connection, table: str) -> dict[str, Any]:
+def _get_table_names(conn) -> list[str]:
     cursor = conn.cursor()
+    if _use_postgres():
+        cursor.execute("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+    else:
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+        """)
+    return [row[0] for row in cursor.fetchall()]
 
+
+def _get_column_meta(conn, table: str) -> list[dict]:
+    """Return [{"name": ..., "declared_type": ...}, ...] for both engines."""
+    cursor = conn.cursor()
+    if _use_postgres():
+        cursor.execute("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            ORDER BY ordinal_position
+        """, (table,))
+        return [
+            {"name": row[0], "declared_type": _pg_type_to_declared(row[1])}
+            for row in cursor.fetchall()
+        ]
+    cursor.execute(f'PRAGMA table_info("{table}")')
+    return [
+        {"name": col[1], "declared_type": (col[2] or "").upper()}
+        for col in cursor.fetchall()
+    ]
+
+
+def _pg_type_to_declared(pg_type: str) -> str:
+    """Normalize a Postgres data_type string to the declared-type used by is_numeric check."""
+    pg = pg_type.upper()
+    if any(t in pg for t in ("INT", "SERIAL")):
+        return "INTEGER"
+    if any(t in pg for t in ("REAL", "FLOAT", "DOUBLE", "NUMERIC", "DECIMAL", "PRECISION")):
+        return "REAL"
+    return "TEXT"
+
+
+def _profile_table(conn, table: str) -> dict[str, Any]:
+    cursor = conn.cursor()
     cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
     row_count: int = cursor.fetchone()[0]
 
-    cursor.execute(f'PRAGMA table_info("{table}")')
-    col_rows = cursor.fetchall()
-
+    col_meta = _get_column_meta(conn, table)
     skip_stats = row_count > MAX_STAT_ROWS
+
     columns: dict[str, Any] = {}
-    for col in col_rows:
-        col_name: str = col[1]
-        declared_type: str = (col[2] or "").upper()
+    for col_info in col_meta:
+        col_name = col_info["name"]
+        declared_type = col_info["declared_type"]
         columns[col_name] = _profile_column(
             conn, table, col_name, declared_type, row_count, skip_stats
         )
@@ -77,7 +132,7 @@ def _profile_table(conn: sqlite3.Connection, table: str) -> dict[str, Any]:
 
 
 def _profile_column(
-    conn: sqlite3.Connection,
+    conn,
     table: str,
     column: str,
     declared_type: str,
@@ -130,8 +185,9 @@ def _profile_column(
     return base
 
 
+# ── Formatting ────────────────────────────────────────────────────────────────
+
 def _fmt(v: Any) -> str:
-    """Format a numeric value concisely."""
     if v is None:
         return "?"
     if isinstance(v, float) and v == int(v) and abs(v) < 1e10:
@@ -157,7 +213,7 @@ def format_profile_for_prompt(profile: dict[str, Any]) -> str:
             prefix = f"  {col_name:<24} {dtype:<8}"
 
             if cinfo.get("skipped"):
-                lines.append(prefix + " (large table — stats skipped)")
+                lines.append(prefix + " (large table -- stats skipped)")
                 continue
 
             stype = cinfo.get("semantic_type", "")
