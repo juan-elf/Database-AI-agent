@@ -1,0 +1,756 @@
+{
+  "db": "data\\demo.db",
+  "domain": "battery",
+  "tolerance": 0.01,
+  "elapsed_total": 299.12528700000075,
+  "results": [
+    {
+      "id": "bat_001",
+      "status": "PASS",
+      "tags": [
+        "count",
+        "basic"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "total_rows": 1810
+        }
+      ],
+      "agent_rows": [
+        {
+          "total_records": 1810
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 10.033473999999842
+    },
+    {
+      "id": "bat_002",
+      "status": "PASS",
+      "tags": [
+        "count",
+        "basic"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "total_batteries": 5
+        }
+      ],
+      "agent_rows": [
+        {
+          "distinct_batteries": 5
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 23.31272010000066
+    },
+    {
+      "id": "bat_003",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "group-by"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "max_cycle": 370
+        },
+        {
+          "battery_id": "B2",
+          "max_cycle": 260
+        },
+        {
+          "battery_id": "B3",
+          "max_cycle": 450
+        },
+        {
+          "battery_id": "B4",
+          "max_cycle": 310
+        },
+        {
+          "battery_id": "B5",
+          "max_cycle": 420
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "max_cycle": 370
+        },
+        {
+          "battery_id": "B2",
+          "max_cycle": 260
+        },
+        {
+          "battery_id": "B3",
+          "max_cycle": 450
+        },
+        {
+          "battery_id": "B4",
+          "max_cycle": 310
+        },
+        {
+          "battery_id": "B5",
+          "max_cycle": 420
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 12.61159299999963
+    },
+    {
+      "id": "bat_004",
+      "status": "PASS",
+      "tags": [
+        "eol",
+        "filter"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "eol_cycle": 296
+        }
+      ],
+      "agent_rows": [
+        {
+          "eol_cycle": 296
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 12.481515299999955
+    },
+    {
+      "id": "bat_005",
+      "status": "PASS",
+      "tags": [
+        "eol",
+        "filter"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "eol_cycle": 322
+        }
+      ],
+      "agent_rows": [
+        {
+          "eol_cycle": 322
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 11.446399200000087
+    },
+    {
+      "id": "bat_006",
+      "status": "PASS",
+      "tags": [
+        "eol",
+        "aggregation",
+        "subquery"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "avg_eol": "258.2000000000000000"
+        }
+      ],
+      "agent_rows": [
+        {
+          "avg_eol_cycle": "258.2000000000000000"
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 17.77254619999985
+    },
+    {
+      "id": "bat_007",
+      "status": "PASS",
+      "tags": [
+        "filter",
+        "count"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "eol_records": 518
+        }
+      ],
+      "agent_rows": [
+        {
+          "records_below_80_soh": 518
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 7.498597800000425
+    },
+    {
+      "id": "bat_008",
+      "status": "FAIL",
+      "tags": [
+        "aggregation",
+        "ranking"
+      ],
+      "reason": "row 0: column count mismatch (1 vs 2)",
+      "expected_rows": [
+        {
+          "battery_id": "B4"
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B4",
+          "avg_capacity": 1.71895451853352
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 7.440616600000794
+    },
+    {
+      "id": "bat_009",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "basic"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "avg_soh": 85.8030401282548
+        }
+      ],
+      "agent_rows": [
+        {
+          "overall_avg_soh": 85.8030401282548
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 6.4845999000008305
+    },
+    {
+      "id": "bat_010",
+      "status": "PASS",
+      "tags": [
+        "filter",
+        "aggregation"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "avg_charge_temp": 24.8735952059428
+        }
+      ],
+      "agent_rows": [
+        {
+          "avg_charge_temp": 24.8735952059428
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 7.7794221000003745
+    },
+    {
+      "id": "bat_011",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "group-by",
+        "soh"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "avg_soh": 85.7508737306337
+        },
+        {
+          "battery_id": "B2",
+          "avg_soh": 85.8584138136644
+        },
+        {
+          "battery_id": "B3",
+          "avg_soh": 85.7602432420519
+        },
+        {
+          "battery_id": "B4",
+          "avg_soh": 85.9477550137427
+        },
+        {
+          "battery_id": "B5",
+          "avg_soh": 85.7537577311198
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "avg_soh": "85.75"
+        },
+        {
+          "battery_id": "B2",
+          "avg_soh": "85.86"
+        },
+        {
+          "battery_id": "B3",
+          "avg_soh": "85.76"
+        },
+        {
+          "battery_id": "B4",
+          "avg_soh": "85.95"
+        },
+        {
+          "battery_id": "B5",
+          "avg_soh": "85.75"
+        }
+      ],
+      "sql_attempts": 2,
+      "retries": 1,
+      "elapsed": 16.605801600000632
+    },
+    {
+      "id": "bat_012",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "group-by"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "total_cycles": 370
+        },
+        {
+          "battery_id": "B2",
+          "total_cycles": 260
+        },
+        {
+          "battery_id": "B3",
+          "total_cycles": 450
+        },
+        {
+          "battery_id": "B4",
+          "total_cycles": 310
+        },
+        {
+          "battery_id": "B5",
+          "total_cycles": 420
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "total_cycles": 370
+        },
+        {
+          "battery_id": "B2",
+          "total_cycles": 260
+        },
+        {
+          "battery_id": "B3",
+          "total_cycles": 450
+        },
+        {
+          "battery_id": "B4",
+          "total_cycles": 310
+        },
+        {
+          "battery_id": "B5",
+          "total_cycles": 420
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 10.218453699999372
+    },
+    {
+      "id": "bat_013",
+      "status": "PASS",
+      "tags": [
+        "filter",
+        "basic",
+        "soh"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "min_soh": 72.7484
+        }
+      ],
+      "agent_rows": [
+        {
+          "min_soh": 72.7484
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 6.703712600001381
+    },
+    {
+      "id": "bat_014",
+      "status": "PASS",
+      "tags": [
+        "degradation",
+        "aggregation",
+        "computed"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "soh_drop_per_cycle": 0.0740048788427337
+        },
+        {
+          "battery_id": "B2",
+          "soh_drop_per_cycle": 0.102908867206353
+        },
+        {
+          "battery_id": "B3",
+          "soh_drop_per_cycle": 0.0606668213162497
+        },
+        {
+          "battery_id": "B4",
+          "soh_drop_per_cycle": 0.0865692583102624
+        },
+        {
+          "battery_id": "B5",
+          "soh_drop_per_cycle": 0.064549157044768
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B2",
+          "soh_degradation_rate": "0.1029"
+        },
+        {
+          "battery_id": "B4",
+          "soh_degradation_rate": "0.0866"
+        },
+        {
+          "battery_id": "B1",
+          "soh_degradation_rate": "0.0740"
+        },
+        {
+          "battery_id": "B5",
+          "soh_degradation_rate": "0.0645"
+        },
+        {
+          "battery_id": "B3",
+          "soh_degradation_rate": "0.0607"
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 11.328094299999066
+    },
+    {
+      "id": "bat_015",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "group-by",
+        "temperature"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "avg_discharge_temp": 35.0382432319022
+        },
+        {
+          "battery_id": "B2",
+          "avg_discharge_temp": 34.864615374345
+        },
+        {
+          "battery_id": "B3",
+          "avg_discharge_temp": 35.0524222522312
+        },
+        {
+          "battery_id": "B4",
+          "avg_discharge_temp": 34.9095806183354
+        },
+        {
+          "battery_id": "B5",
+          "avg_discharge_temp": 34.9950952393668
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "avg_discharge_temp": "35.04"
+        },
+        {
+          "battery_id": "B2",
+          "avg_discharge_temp": "34.86"
+        },
+        {
+          "battery_id": "B3",
+          "avg_discharge_temp": "35.05"
+        },
+        {
+          "battery_id": "B4",
+          "avg_discharge_temp": "34.91"
+        },
+        {
+          "battery_id": "B5",
+          "avg_discharge_temp": "35.00"
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 9.763869700000214
+    },
+    {
+      "id": "bat_016",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "having",
+        "subquery"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_count": 5
+        }
+      ],
+      "agent_rows": [
+        {
+          "batteries_above_85_soh": 5
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 24.302805199999057
+    },
+    {
+      "id": "bat_017",
+      "status": "FAIL",
+      "tags": [
+        "aggregation",
+        "ranking",
+        "computed"
+      ],
+      "reason": "row 0: column count mismatch (1 vs 2)",
+      "expected_rows": [
+        {
+          "battery_id": "B1"
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "total_soh_drop": 27.3078
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 10.80306070000006
+    },
+    {
+      "id": "bat_018",
+      "status": "PASS",
+      "tags": [
+        "filter",
+        "aggregation",
+        "group-by"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "cycles_above_90": 124
+        },
+        {
+          "battery_id": "B2",
+          "cycles_above_90": 89
+        },
+        {
+          "battery_id": "B3",
+          "cycles_above_90": 150
+        },
+        {
+          "battery_id": "B4",
+          "cycles_above_90": 106
+        },
+        {
+          "battery_id": "B5",
+          "cycles_above_90": 139
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "cycles_above_90_soh": 124
+        },
+        {
+          "battery_id": "B2",
+          "cycles_above_90_soh": 89
+        },
+        {
+          "battery_id": "B3",
+          "cycles_above_90_soh": 150
+        },
+        {
+          "battery_id": "B4",
+          "cycles_above_90_soh": 106
+        },
+        {
+          "battery_id": "B5",
+          "cycles_above_90_soh": 139
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 20.827307100000326
+    },
+    {
+      "id": "bat_019",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "computed",
+        "group-by",
+        "temperature"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "avg_temp_diff": "10.0338"
+        },
+        {
+          "battery_id": "B2",
+          "avg_temp_diff": "9.8775"
+        },
+        {
+          "battery_id": "B3",
+          "avg_temp_diff": "10.0535"
+        },
+        {
+          "battery_id": "B4",
+          "avg_temp_diff": "9.9581"
+        },
+        {
+          "battery_id": "B5",
+          "avg_temp_diff": "10.1215"
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "avg_temp_diff": "10.03"
+        },
+        {
+          "battery_id": "B2",
+          "avg_temp_diff": "9.88"
+        },
+        {
+          "battery_id": "B3",
+          "avg_temp_diff": "10.05"
+        },
+        {
+          "battery_id": "B4",
+          "avg_temp_diff": "9.96"
+        },
+        {
+          "battery_id": "B5",
+          "avg_temp_diff": "10.12"
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 13.032025399999839
+    },
+    {
+      "id": "bat_020",
+      "status": "FAIL",
+      "tags": [
+        "window-function",
+        "aggregation",
+        "computed"
+      ],
+      "reason": "row 1 col 1: expected Decimal('0.6027'), got 0.582397",
+      "expected_rows": [
+        {
+          "battery_id": "B1",
+          "max_single_cycle_drop": "0.7698"
+        },
+        {
+          "battery_id": "B2",
+          "max_single_cycle_drop": "0.6027"
+        },
+        {
+          "battery_id": "B3",
+          "max_single_cycle_drop": "0.8300"
+        },
+        {
+          "battery_id": "B4",
+          "max_single_cycle_drop": "0.7060"
+        },
+        {
+          "battery_id": "B5",
+          "max_single_cycle_drop": "0.6819"
+        }
+      ],
+      "agent_rows": [
+        {
+          "battery_id": "B1",
+          "max_single_cycle_loss": 0.769798
+        },
+        {
+          "battery_id": "B2",
+          "max_single_cycle_loss": 0.582397
+        },
+        {
+          "battery_id": "B3",
+          "max_single_cycle_loss": 0.830002
+        },
+        {
+          "battery_id": "B4",
+          "max_single_cycle_loss": 0.705994
+        },
+        {
+          "battery_id": "B5",
+          "max_single_cycle_loss": 0.6819
+        }
+      ],
+      "sql_attempts": 2,
+      "retries": 1,
+      "elapsed": 23.512669200001255
+    },
+    {
+      "id": "bat_021",
+      "status": "PASS",
+      "tags": [
+        "aggregation",
+        "computed",
+        "percentage"
+      ],
+      "reason": "ok",
+      "expected_rows": [
+        {
+          "pct_below_85": "48.51"
+        }
+      ],
+      "agent_rows": [
+        {
+          "percentage_below_85": "48.5082872928176796"
+        }
+      ],
+      "sql_attempts": 1,
+      "retries": 0,
+      "elapsed": 7.4109960999994655
+    }
+  ]
+}

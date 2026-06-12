@@ -285,32 +285,37 @@ Add `"order_matters": true` when the test explicitly checks row ordering.
 
 ### Latest eval results
 
-> Measured on `data/demo.db`. Run `python eval/run_eval.py --db data/demo.db --domain battery --output eval/results_battery.json` to refresh.
+> Measured on `data/demo.db`. Run `python eval/run_eval.py --db data/demo.db --domain battery --output eval/results_battery_gemma.json` to refresh.
 
 | Dataset | Model | Cases | Pass | Accuracy | Date |
 |---------|-------|-------|------|----------|------|
-| battery (demo.db) | MiniMax-M2.7 | 21 | 14 | **66.7%** | 2026-06-10 |
-| battery (demo.db) | nvidia/nemotron-3-ultra (OpenRouter) | — | — | *pending re-run* | — |
+| battery (demo.db) | MiniMax-M2.7 | 21 | 14 | 66.7% | 2026-06-10 |
+| battery (demo.db) | **google/gemma-4-31b-it (OpenRouter)** | **21** | **18** | **85.7%** ¹ | **2026-06-12** |
 | ecommerce | — | 17 | — | *requires ecommerce.db* | — |
 
-**Accuracy by tag (battery baseline):**
+¹ *Strict accuracy. Semantic accuracy ~90%: bat_008 and bat_017 return correct answer with extra context column — eval counts as fail, but the answer is informative.*
+
+**Accuracy by tag — Gemma (2026-06-12):**
 
 | Tag | Accuracy | Tag | Accuracy |
 |-----|----------|-----|----------|
-| count | 100% | group-by | 83% |
-| subquery | 100% | aggregation | 73% |
-| having | 100% | filter | 50% |
-| temperature | 100% | eol | 33% |
-| percentage | 100% | ranking | 0% |
-| degradation | 100% | window-function | 0% |
+| count | 100% | aggregation | 80% |
+| basic | 100% | computed | 60% |
+| filter | 100% | ranking | 0% |
+| eol | 100% | window-function | 0% |
+| group-by | 100% | | |
+| subquery | 100% | | |
+| soh | 100% | | |
+| temperature | 100% | | |
+| having | 100% | | |
+| percentage | 100% | | |
 
-**Failure patterns identified:**
+**Remaining failure patterns:**
 
 | Pattern | Cases | Description |
 |---------|-------|-------------|
-| Extra columns | bat_003, bat_004, bat_005, bat_013 | Agent adds unrequested context columns (battery_id, soh, cycle) |
-| Missing LIMIT | bat_008, bat_017 | Ranking queries return all rows instead of top-1 |
-| Sign/polarity | bat_020 | "Largest drop" returned as positive vs expected negative |
+| Extra columns | bat_008, bat_017 | Ranking queries return correct answer + extra context column — strict eval fails, but semantically correct |
+| Window function value | bat_020 | LAG-based single-cycle drop calculation returns slightly different values from reference |
 
 ---
 
@@ -320,7 +325,7 @@ Key constants in `agent.py`:
 
 | Constant | Default | Description |
 |---|---|---|
-| `MODEL_NAME` | `nvidia/nemotron-3-ultra-550b-a55b:free` | Model via OpenRouter (free tier) |
+| `MODEL_NAME` | `google/gemma-4-31b-it:free` | Model via OpenRouter (free tier) |
 | `MAX_ITERATIONS` | `10` | Max agent loop iterations per question |
 | `MAX_RETRIES` | `3` | API retries on transient errors |
 | `INITIAL_BACKOFF` | `2` | Initial backoff in seconds (exponential: 2s, 4s, 8s) |

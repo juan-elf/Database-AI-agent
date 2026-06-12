@@ -24,7 +24,7 @@ import ui
 
 load_dotenv()
 
-MODEL_NAME = "nvidia/nemotron-3-ultra-550b-a55b:free"
+MODEL_NAME = "google/gemma-4-31b-it:free"
 MAX_ITERATIONS = 10
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 2

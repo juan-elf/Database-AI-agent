@@ -1,0 +1,177 @@
+{
+  "db": "data\\demo.db",
+  "domain": "ecommerce",
+  "tolerance": 0.01,
+  "elapsed_total": 45.22816969999985,
+  "results": [
+    {
+      "id": "eco_001",
+      "status": "SKIP",
+      "tags": [
+        "count",
+        "basic"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"customers\" does not exist\nLINE 1: SELECT COUNT(*) AS total_customers FROM customers\n                                                ^\n"
+    },
+    {
+      "id": "eco_002",
+      "status": "SKIP",
+      "tags": [
+        "count",
+        "basic"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"products\" does not exist\nLINE 1: SELECT COUNT(*) AS total_products FROM products\n                                               ^\n"
+    },
+    {
+      "id": "eco_003",
+      "status": "SKIP",
+      "tags": [
+        "revenue",
+        "filter",
+        "aggregation"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"orders\" does not exist\nLINE 1: SELECT SUM(total_amount) AS total_revenue FROM orders WHERE ...\n                                                       ^\n"
+    },
+    {
+      "id": "eco_004",
+      "status": "SKIP",
+      "tags": [
+        "count",
+        "filter"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"orders\" does not exist\nLINE 1: SELECT COUNT(*) AS completed_orders FROM orders WHERE status...\n                                                 ^\n"
+    },
+    {
+      "id": "eco_005",
+      "status": "SKIP",
+      "tags": [
+        "aggregation",
+        "ranking",
+        "geography"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"customers\" does not exist\nLINE 1: SELECT city FROM customers GROUP BY city ORDER BY COUNT(*) D...\n                         ^\n"
+    },
+    {
+      "id": "eco_006",
+      "status": "SKIP",
+      "tags": [
+        "aggregation",
+        "revenue"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"orders\" does not exist\nLINE 1: SELECT AVG(total_amount) AS avg_order_value FROM orders WHER...\n                                                         ^\n"
+    },
+    {
+      "id": "eco_007",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "ranking",
+        "revenue"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"products\" does not exist\nLINE 1: SELECT p.name FROM products p JOIN order_items oi ON p.produ...\n                           ^\n"
+    },
+    {
+      "id": "eco_008",
+      "status": "SKIP",
+      "tags": [
+        "count",
+        "basic"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"products\" does not exist\nLINE 1: ...T COUNT(DISTINCT category) AS total_categories FROM products\n                                                               ^\n"
+    },
+    {
+      "id": "eco_009",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "aggregation",
+        "revenue",
+        "group-by"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"order_items\" does not exist\nLINE 1: ... SUM(oi.quantity * oi.unit_price) AS revenue FROM order_item...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_010",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "ranking",
+        "revenue"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"customers\" does not exist\nLINE 1: SELECT c.name FROM customers c JOIN orders o ON c.customer_i...\n                           ^\n"
+    },
+    {
+      "id": "eco_011",
+      "status": "SKIP",
+      "tags": [
+        "time-series",
+        "aggregation",
+        "revenue"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"orders\" does not exist\nLINE 1: ...date) AS month, SUM(total_amount) AS revenue FROM orders WHE...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_012",
+      "status": "SKIP",
+      "tags": [
+        "subquery",
+        "aggregation",
+        "customer-behavior"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"orders\" does not exist\nLINE 1: ...AS repeat_customers FROM (SELECT customer_id FROM orders WHE...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_013",
+      "status": "SKIP",
+      "tags": [
+        "subquery",
+        "filter",
+        "customer-behavior"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"customers\" does not exist\nLINE 1: SELECT name FROM customers WHERE customer_id NOT IN (SELECT ...\n                         ^\n"
+    },
+    {
+      "id": "eco_014",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "aggregation",
+        "ranking"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"order_items\" does not exist\nLINE 1: ...ELECT p.name, SUM(oi.quantity) AS total_sold FROM order_item...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_015",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "having",
+        "revenue",
+        "group-by"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"order_items\" does not exist\nLINE 1: ... SUM(oi.quantity * oi.unit_price) AS revenue FROM order_item...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_016",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "aggregation",
+        "subquery",
+        "computed"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"order_items\" does not exist\nLINE 1: ... oi.order_id, SUM(oi.quantity) AS item_count FROM order_item...\n                                                             ^\n"
+    },
+    {
+      "id": "eco_017",
+      "status": "SKIP",
+      "tags": [
+        "join",
+        "aggregation",
+        "computed",
+        "customer-behavior"
+      ],
+      "reason": "expected_sql failed: SQL Error: relation \"customers\" does not exist\nLINE 1: ...DISTINCT oi.product_id) AS distinct_products FROM customers ...\n                                                             ^\n"
+    }
+  ]
+}
