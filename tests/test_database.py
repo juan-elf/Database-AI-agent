@@ -272,6 +272,20 @@ class TestExecuteQuery:
             conn.execute("INSERT INTO items VALUES (99, 'x', 1.0, 'Z')")
         conn.close()
 
+    def test_postgres_column_error_returns_column_hint_not_table_hint(self, temp_db):
+        """Postgres column errors contain 'does not exist' — must not be
+        misidentified as a table error and return 'wrong table name' hint."""
+        from database import _generate_error_hint
+        hint = _generate_error_hint('ERROR: column "xyz" does not exist')
+        assert "column" in hint.lower()
+        assert "table" not in hint.lower()
+
+    def test_postgres_table_error_returns_table_hint(self, temp_db):
+        from database import _generate_error_hint
+        hint = _generate_error_hint('ERROR: relation "nonexistent" does not exist')
+        assert "table" in hint.lower()
+        assert "column" not in hint.lower()
+
     def test_ambiguous_column_returns_hint(self, temp_db):
         # Add a second table sharing a column name to trigger ambiguity.
         conn = sqlite3.connect(temp_db)

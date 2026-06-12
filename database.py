@@ -357,16 +357,22 @@ def _generate_error_hint(error_msg: str) -> str:
     """Generate a helpful hint from a DB error message."""
     error_lower = error_msg.lower()
 
-    if "no such table" in error_lower or "does not exist" in error_lower:
+    # Check column errors BEFORE table errors — Postgres column errors contain
+    # "does not exist" too (e.g. 'column "x" does not exist'), so column must
+    # be matched first to avoid giving a misleading "wrong table" hint.
+    if ("no such column" in error_lower
+            or ("column" in error_lower and "does not exist" in error_lower)):
+        return ("Wrong column name. Check the schema in the system prompt. "
+                "Use get_distinct_values to inspect column values.")
+
+    if ("no such table" in error_lower
+            or "relation" in error_lower and "does not exist" in error_lower
+            or ("does not exist" in error_lower and "column" not in error_lower)):
         try:
             tables = get_table_names()
             return f"Wrong table name. Available tables: {', '.join(tables)}."
         except Exception:
             return "Wrong table name. Check the schema in the system prompt."
-
-    if "no such column" in error_lower or "column" in error_lower and "does not exist" in error_lower:
-        return ("Wrong column name. Check the schema in the system prompt. "
-                "Use get_distinct_values to inspect column values.")
 
     if "syntax error" in error_lower:
         engine = get_db_engine()

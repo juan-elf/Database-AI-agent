@@ -189,16 +189,19 @@ A domain pack is a Markdown file in the `domains/` folder. When loaded, its cont
 
 ## Tool Strategy
 
-The agent has three tools and uses them based on the question type:
+The agent has four tools and uses them based on the question type:
 
-| Question type | Strategy |
-|---|---|
-| Data in the database | `execute_sql` first |
-| Unknown column values / categories | `get_distinct_values` before filtering |
-| External benchmarks, definitions, typical values | `web_search` |
-| "Is our data normal?" | Both: SQL → web → combine and label sources |
+| Question type | Tool | Strategy |
+|---|---|---|
+| Data in the database | `execute_sql` | Always first — primary data tool |
+| Unknown column values / categories | `get_distinct_values` | Before filtering on categorical columns |
+| Correlation, anomaly detection, trend, distribution | `run_analysis` | Runs Python/pandas on SQL results in a sandbox |
+| External benchmarks, definitions, typical values | `web_search` | Only when data is not in the database |
+| "Is our data normal?" | `execute_sql` + `web_search` | Both: SQL → web → combine and label sources |
 
 Web search is **optional** — if `TAVILY_API_KEY` is not set, the agent operates in DB-only mode.
+
+`run_analysis` executes Python/pandas code in a restricted namespace (no `import os`, `open`, `exec`, `eval`, subprocess, or network). It operates on the DataFrame returned by a prior SQL query.
 
 ---
 
@@ -206,10 +209,11 @@ Web search is **optional** — if `TAVILY_API_KEY` is not set, the agent operate
 
 The database tool is **read-only** with defense-in-depth:
 
-1. **Whitelist** — only `SELECT` / `WITH` is allowed
-2. **Blacklist** — `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `REPLACE`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM` are rejected
-3. **No multi-statement** — `SELECT 1; SELECT 2` is rejected
-4. **Identifier validation** — table/column names in `get_distinct_values` are validated against `^[a-zA-Z_][a-zA-Z0-9_]*$`
+1. **Engine-level read-only** *(strongest layer)* — SQLite opened with `mode=ro` URI flag; PostgreSQL connected via a role with `GRANT SELECT` only (`set_session(readonly=True)`) — write is impossible even if all app checks are bypassed
+2. **Whitelist** — only `SELECT` / `WITH` is allowed at the app layer
+3. **Blacklist** — `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `REPLACE`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM` are rejected
+4. **No multi-statement** — `SELECT 1; SELECT 2` is rejected
+5. **Identifier validation** — table/column names in `get_distinct_values` are validated against `^[a-zA-Z_][a-zA-Z0-9_]*$`
 
 ---
 
@@ -363,10 +367,12 @@ universal-sql-agent/
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
-├── main.py                 # entry point
-├── agent.py                # agent loop
-├── tools.py                # tool definitions and dispatcher
-├── database.py             # SQLite ops + validation
+├── main.py                 # CLI entry point
+├── agent.py                # agent loop (OpenRouter / OpenAI-compatible)
+├── tools.py                # tool schema & dispatcher (4 tools)
+├── database.py             # dual-engine DB layer (SQLite + PostgreSQL)
+├── profiler.py             # auto data-profiling, cached by mtime/URL
+├── analysis.py             # sandboxed pandas executor
 ├── web_search.py           # Tavily web search integration
 ├── ui.py                   # rich-based presentation
 ├── logger.py               # JSONL session logger
@@ -374,8 +380,24 @@ universal-sql-agent/
 ├── domains/
 │   ├── battery.md          # domain pack: Li-ion battery research
 │   └── ecommerce.md        # domain pack: e-commerce / retail
+├── eval/
+│   ├── run_eval.py         # eval harness (38 cases, tag breakdown)
+│   └── cases/
+│       ├── battery.jsonl   # 21 test cases
+│       └── ecommerce.jsonl # 17 test cases
+├── tests/
+│   ├── conftest.py         # autouse fixture: isolate from live Postgres
+│   ├── test_database.py
+│   ├── test_agent.py
+│   ├── test_tools.py
+│   ├── test_analysis.py
+│   └── test_profiler.py
+├── .github/
+│   └── workflows/
+│       └── tests.yml       # CI: pytest on every push
 ├── data/
 │   ├── demo.db             # bundled demo database (committed)
+│   ├── supabase_import.sql # PostgreSQL dump for Supabase import
 │   └── *.db                # other databases (gitignored)
 └── logs/
     └── session_*.jsonl     # session logs (gitignored)
@@ -385,4 +407,4 @@ universal-sql-agent/
 
 ## License
 
-Not yet specified. Learning project.
+MIT
