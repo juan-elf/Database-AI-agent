@@ -29,32 +29,34 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 ## Architecture
 
 ```
-+----------+    user input    +----------+
-| main.py  | --------------> | agent.py |
-|  (CLI)   | <-------------- |  (loop)  |
-+----------+    rich output   +----+-----+
-                                   |
-                          tool_calls|
-                                   v
-                    +--------------+---------------+
-                    |              |               |
-               +----+----+   +----+----+   +-------+------+
-               |tools.py |   |tools.py |   | tools.py     |
-               |execute_ |   |get_     |   | web_search   |
-               |sql      |   |distinct |   |              |
-               +---------+   +---------+   +--------------+
-                    |                            |
-                    v                            v
-             +-----------+              +----------------+
-             |database.py|              | web_search.py  |
-             | + SQLite  |              | (Tavily API)   |
-             +-----------+              +----------------+
-                    |
-                    | log every event
-                    v
-               +---------+
-               |logger.py| --> logs/*.jsonl
-               +---------+
++----------+    user input    +---------------------+
+| main.py  | --------------> |      agent.py        |
+|  (CLI)   | <-------------- |  (OpenRouter loop)   |
++----------+    rich output   +----------+----------+
+                                         |
+                              tool_calls |   on startup
+                                         |   profiler.py ──> system prompt
+                                         v
+              +-----------+-----------+-----------+-----------+
+              |           |           |           |           |
+        +-----+----+ +----+-----+ +---+------+ +--+--------+
+        | execute_ | | get_     | | run_     | | web_      |
+        | sql      | | distinct | | analysis | | search    |
+        +-----+----+ +----+-----+ +---+------+ +--+--------+
+              |           |           |              |
+              v           v           v              v
+       +-------------+  (same)  +-----------+ +------------+
+       |  database.py|          | analysis  | |web_search  |
+       | SQLite (ro) |          |   .py     | |(Tavily API)|
+       | PostgreSQL  |          | (sandbox) | +------------+
+       | (Supabase)  |          +-----------+
+       +------+------+
+              |
+              | log every event
+              v
+         +---------+
+         |logger.py| --> logs/*.jsonl
+         +---------+
 ```
 
 ### File overview
@@ -348,6 +350,18 @@ Key constants in `agent.py`:
 
 **Agent gives wrong queries or gets stuck in a loop**  
 → Open the latest log in `logs/`, check which `tool_call` errored and what hint was returned. Try `/reset` and rephrase the question.
+
+---
+
+## Roadmap: Safe Write Architecture (v2)
+
+Write operations are intentionally out of scope for v1 — read-only is the core safety guarantee. If write support is added in future, the safe architecture is:
+
+1. **Separate connections** — analytics path uses read-only role; writes go through a separate connection that is never touched by the agent loop
+2. **Typed write tools, not raw SQL** — define `insert_row(table, values)` or domain-specific tools (e.g. `record_test_result(...)`). The app validates against schema and builds parameterized SQL. The LLM only fills parameters, never writes SQL directly
+3. **Human-in-the-loop** — the tool returns a *proposed change* (SQL + dry-run preview) for user confirmation before executing
+4. **Transaction guard** — wrap in a transaction; block if write affects > N rows without explicit override
+5. **Immutable audit log** — extend the JSONL logger: who, when, SQL, rows affected, before/after snapshot
 
 ---
 

@@ -59,7 +59,7 @@ Deploy `dashboard.py` ke Streamlit Community Cloud.
   Tambah pola fallback `os.getenv("X") or st.secrets.get("X")` supaya jalan di lokal + cloud.
   Masukkan `MINIMAX_API_KEY`, `TAVILY_API_KEY` ke secrets UI.
 - [x] Connect repo di share.streamlit.io → pilih `dashboard.py` → isi secrets → live.
-- [ ] Taruh URL demo di README + CV.
+- [x] Taruh URL demo di README. (CV — update manual)
 
 ### Fase 2 — Supabase Postgres (upgrade, setelah live)
 
@@ -73,7 +73,7 @@ Deploy `dashboard.py` ke Streamlit Community Cloud.
 - [x] Update prompt + domain packs ke dialek Postgres.
 - [x] Buat **role read-only** di Supabase (`GRANT SELECT` saja) untuk koneksi agent.
 - [x] Pakai **connection pooler** Supabase (Session pooler port 5432) — konek berhasil.
-- [ ] ⚠️ `service_role` key hanya server-side; jangan pernah di client.
+- [x] ⚠️ `service_role` key hanya server-side — dikonfirmasi tidak dipakai di client. Hanya `DATABASE_URL` (agent_user read-only) yang di-set.
 
 ---
 
@@ -118,20 +118,22 @@ Arsitektur write yang aman (kalau diimplementasikan):
 5. **Audit trail** — extend logger JSONL jadi audit immutable: siapa, kapan, SQL, berapa baris,
    snapshot before/after.
 
-- [ ] **Minimal sekarang:** tulis arsitektur write aman ini di README sebagai roadmap
-  (read path vs write path). Sudah menunjukkan production thinking = nilai interview, walau belum
-  diimplementasikan.
+- [x] **Minimal sekarang:** tulis arsitektur write aman ini di README sebagai roadmap
+  (read path vs write path). Section "Roadmap: Safe Write Architecture (v2)" ditambahkan ke README.
 
 ---
 
 ## Urutan eksekusi yang disarankan
 
-| # | Item | Alasan |
+> Semua item prioritas tinggi sudah selesai per 2026-06-12. Yang tersisa adalah tier 2 opsional.
+
+| # | Item | Status |
 |---|------|--------|
-| 1 | Fix bug order-dependent `compare_rows` | Bisa bikin eval false-negative saat di-review |
-| 2 | Deployment Fase 1 (Streamlit Cloud) | Demo live = effort kecil, dampak besar untuk lamaran |
-| 3 | Tool pandas/stats (Arah A.1) | Yang sebenarnya bikin "data analyst" |
-| 4 | Auto data-profiling (Arah A.2) | Wujudkan visi "spesialis data terpasang" + fix schema scaling |
-| 5 | Eval diperluas + akurasi di README | Bukti kuantitatif untuk Data/ML |
-| 6 | Known Limitations + arsitektur write di README | Production thinking |
-| 7 | Supabase Fase 2, lalu write-path (v2) | Effort & risiko besar — belakangan |
+| 1 | Fix bug order-dependent `compare_rows` | ✅ |
+| 2 | Deployment Fase 1 (Streamlit Cloud) | ✅ live |
+| 3 | Tool pandas/stats (Arah A.1) | ✅ |
+| 4 | Auto data-profiling (Arah A.2) | ✅ |
+| 5 | Eval diperluas + akurasi di README (85.7% Gemma) | ✅ |
+| 6 | Known Limitations + arsitektur write di README | ✅ |
+| 7 | Supabase Fase 2 (dual-engine + read-only role) | ✅ |
+| 8 | Caching query/schema, history management, cost tracking | ⏳ opsional |
