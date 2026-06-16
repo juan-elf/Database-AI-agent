@@ -398,6 +398,7 @@ with st.sidebar:
     NAV = [
         ("📊", "Dashboard",    "dashboard"),
         ("💬", "Chat",         "chat"),
+        ("🧠", "Insight Report", "report"),
         ("🗄️", "DB Explorer",  "explorer"),
         ("📋", "Riwayat Sesi", "history"),
         ("📈", "Analytics",    "analytics"),
@@ -934,3 +935,135 @@ elif page == "analytics":
                              color_discrete_sequence=COLORS)
                 fmt(fig, "Tool Calls per Sesi", 280)
                 st.plotly_chart(fig, use_container_width=True, config=_PCFG)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INSIGHT REPORT
+# ─────────────────────────────────────────────────────────────────────────────
+elif page == "report":
+    page_header("Insight Report", "Analisis otomatis — satu tombol, laporan lengkap")
+
+    if "agent" not in st.session_state:
+        st.markdown("""
+        <div style="background:#F8F5FF;border-radius:16px;padding:32px;text-align:center;
+                    border:1.5px dashed #D0C0FF;margin-top:24px;">
+            <div style="font-size:36px;margin-bottom:12px;">🧠</div>
+            <div style="font-size:14px;color:#7C5CFC;font-weight:600;">
+                Inisialisasi agent dulu di sidebar untuk generate laporan.
+            </div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#F0EBFF,#EBF3FF);border-radius:16px;
+                    padding:20px 24px;margin-bottom:20px;border:1px solid #E0D5FF;">
+            <div style="font-size:15px;font-weight:700;color:#4A3A8A;margin-bottom:6px;">
+                🤖 Cara kerja
+            </div>
+            <div style="font-size:13px;color:#5A4A9A;line-height:1.7;">
+                Agent membaca profil database → merumuskan 6 pertanyaan analitik sendiri →
+                menjalankan SQL → mendeteksi anomali → mensintesis laporan naratif.
+                <br><strong>Tidak perlu ketik apa pun.</strong>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        col_btn, col_info = st.columns([1, 3])
+        with col_btn:
+            generate = st.button("🚀  Generate Report", type="primary",
+                                 use_container_width=True, key="gen_report_btn")
+        with col_info:
+            if "last_report" in st.session_state:
+                r = st.session_state.last_report
+                st.caption(f"Laporan terakhir: {r.get('generated_at', '')} · "
+                           f"{len(r.get('findings', []))} temuan")
+
+        if generate:
+            from insight_report import generate_report
+
+            status_box = st.empty()
+            progress_text = st.empty()
+
+            def on_progress(step: str, detail: str) -> None:
+                icons = {
+                    "profiling":    "📊",
+                    "planning":     "🧠",
+                    "executing":    "⚡",
+                    "synthesizing": "✍️",
+                    "done":         "✅",
+                }
+                icon = icons.get(step, "⏳")
+                progress_text.markdown(
+                    f'<div style="font-size:13px;color:#7C5CFC;">'
+                    f'{icon} {detail}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            with st.spinner("Menghasilkan laporan..."):
+                report = generate_report(on_progress=on_progress)
+
+            progress_text.empty()
+            st.session_state.last_report = report
+
+            if report.get("errors"):
+                for err in report["errors"]:
+                    st.error(err)
+
+        # ── Display report ────────────────────────────────────────────────────
+        if "last_report" in st.session_state:
+            r = st.session_state.last_report
+
+            # Executive summary
+            if r.get("executive_summary"):
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg,#7C5CFC,#5B8CFF);color:white;
+                            border-radius:16px;padding:24px 28px;margin:20px 0;">
+                    <div style="font-size:13px;font-weight:700;opacity:.8;
+                                margin-bottom:8px;letter-spacing:.5px;">RINGKASAN EKSEKUTIF</div>
+                    <div style="font-size:15px;line-height:1.7;">{r['executive_summary']}</div>
+                    <div style="font-size:11px;opacity:.65;margin-top:10px;">
+                        {r['generated_at']} · {r['db_label']}
+                    </div>
+                </div>""", unsafe_allow_html=True)
+
+            # Findings
+            findings = r.get("findings", [])
+            if findings:
+                st.markdown("### Temuan")
+                for i, f in enumerate(findings, 1):
+                    anomaly_badge = " 🔴 Anomali" if f.get("is_anomaly") else ""
+                    with st.expander(f"**{i}. {f['question']}**{anomaly_badge}",
+                                     expanded=(i == 1)):
+                        if f.get("error"):
+                            st.warning(f"SQL gagal: {f['error']}")
+                        else:
+                            rows = f.get("rows", [])
+                            if rows:
+                                df_f = pd.DataFrame(rows)
+                                st.dataframe(df_f, use_container_width=True,
+                                             hide_index=True)
+                                fig = auto_chart(df_f)
+                                if fig:
+                                    fmt(fig, "", 260)
+                                    st.plotly_chart(fig, use_container_width=True,
+                                                    config=_PCFG)
+                            else:
+                                st.info("Query mengembalikan 0 baris.")
+                        with st.expander("SQL", expanded=False):
+                            st.code(f["sql"], language="sql")
+
+            # Recommendations
+            if r.get("recommendations"):
+                st.markdown("### Rekomendasi")
+                st.markdown(f"""
+                <div style="background:#F0FFF4;border-radius:12px;padding:20px 24px;
+                            border-left:4px solid #48BB78;">
+                    {r['recommendations']}
+                </div>""", unsafe_allow_html=True)
+
+            # Full narrative download
+            st.divider()
+            st.download_button(
+                "⬇️  Download laporan (.md)",
+                data=r.get("narrative", ""),
+                file_name=f"insight_report_{r['generated_at'].replace(' ', '_').replace(':', '')}.md",
+                mime="text/markdown",
+                key="download_report",
+            )

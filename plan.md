@@ -123,6 +123,98 @@ Arsitektur write yang aman (kalau diimplementasikan):
 
 ---
 
+## FITUR — Arah B-lanjutan: Smart Data Ingestion + Routing (v2 lengkap)
+
+> Visi user (2026-06-13): agent bisa **input data ke database**, dan **memilih sendiri tabel/DB
+> yang sesuai** berdasarkan isi data (mis. laporan keuangan → tabel finance; data baterai →
+> tabel battery). Dua pintu masuk: **upload file di dashboard** ATAU **lewat percakapan AI agent**,
+> lalu data bisa langsung dianalisis.
+
+### Prinsip framing
+
+- ⚠️ **Ini PIVOT, bukan penambahan fitur.** Begitu agent bisa menulis, selling point
+  "read-only, aman by design" runtuh kalau dilakukan naif. Wajib jalur write terpisah & digated.
+- 🎯 **Angle terkuat bukan "INSERT", tapi "routing".** INSERT itu biasa. Yang impresif secara
+  engineering adalah **klasifikasi/schema-matching**: menentukan data masuk ke tabel mana.
+  Separuh solusinya **sudah ada di `profiler.py`** → reuse, jangan bangun dari nol.
+
+### Komponen arsitektur
+
+1. **Catalog layer** — profil semua tabel/DB yang dimiliki (reuse `profiler.py` + domain pack
+   sebagai deskripsi) → katalog "tabel X berisi apa, kolomnya apa, tipe semantiknya apa".
+2. **Router/classifier** — data masuk → bandingkan kolom & nilai dengan katalog → pilih tabel
+   paling cocok + **confidence score** → **konfirmasi ke user** ("Data ini cocok untuk
+   `finance.transactions` — benar?").
+3. **SATU jalur write yang aman** — upload CSV **dan** input chat menyalurkan ke pipa yang sama.
+   Jangan bangun dua mekanisme write terpisah.
+4. **Dua pintu masuk (UI):** (a) upload file di dashboard, (b) percakapan ke agent. Keduanya
+   bermuara ke jalur write yang sama.
+
+### Security — tidak bisa ditawar
+
+1. **Koneksi/role write terpisah** dari path analitik. Path baca tetap read-only (identitas inti).
+   Write lewat role berbeda dengan grant `INSERT` terbatas, digated.
+2. **LLM tidak pernah meng-emit SQL write mentah.** LLM hanya mengusulkan **data terstruktur**
+   (tabel + mapping kolom→nilai). **App** yang bangun SQL ber-parameter. Mematikan SQL injection +
+   menjaga write dalam schema yang dikenal.
+3. **Human-in-the-loop** — untuk keputusan routing **dan** untuk write (preview baris sebelum commit).
+4. **Transaction + audit log** — extend logger JSONL jadi audit immutable (siapa, kapan, ke tabel
+   mana, berapa baris, snapshot).
+5. **Andalkan constraint DB** (NOT NULL, FK, tipe) — biar Postgres menolak data kotor.
+
+### Keputusan arsitektur (default tegas — konfirmasi saat mulai)
+
+- **"Database yang sesuai" → banyak TABEL/schema dalam satu Postgres**, bukan banyak file DB
+  terpisah. Karena sudah di Supabase, "pilih database sesuai" dipetakan jadi "pilih tabel/schema
+  sesuai". Lebih mudah dikelola + memungkinkan analisis lintas-data.
+- **Mulai append-only ke tabel yang sudah ada.** Tunda "bikin tabel baru otomatis dari upload yang
+  tak cocok" (= schema evolution, paling berbahaya).
+- **Routing default: human-confirms** (tampilkan tabel tujuan + confidence, user setujui).
+
+### Pentahapan (urut risiko)
+
+| Fase | Isi | Risiko |
+|------|-----|--------|
+| **B1** | Catalog + router classifier — **READ-ONLY**, hanya *menentukan & menampilkan* tabel tujuan, belum menulis | Nol — novel, impresif, langsung demoable |
+| **B2** | Upload CSV → append ke tabel hasil match (jalur write aman + konfirmasi) | Sedang |
+| **B3** | Input conversational lewat agent → jalur write yang sama | Sedang |
+| **B4** | Bikin tabel baru / schema evolution | Tinggi — **defer** |
+
+- [ ] **B1 — Catalog + router classifier (READ-ONLY).** Titik mulai paling aman & bernilai.
+  Fitur kuat tanpa menulis apa pun. Reuse `profiler.py`.
+- [ ] **B2 — Upload CSV → confirmed append.** Jalur write aman pertama (typed insert tool +
+  transaction + audit + konfirmasi).
+- [ ] **B3 — Conversational insert** lewat jalur write yang sama.
+- [ ] **B4 — New-table creation / schema evolution.** Defer; paling berisiko.
+
+> Catatan timeline: **Fase B1 saja sudah fitur kuat & aman** untuk portfolio — router yang
+> mengklasifikasi data ke tabel tepat, tanpa menulis. Tidak perlu langsung membangun write penuh.
+
+---
+
+## FITUR — Arah C: Insight Report Mode (rekomendasi #1 "saran terbaik", 2026-06-13)
+
+> Saran terbaik untuk membedakan dari ribuan project text-to-SQL. **Deferred oleh user** ("nanti").
+
+Ubah dari *penjawab query* (1 pertanyaan → 1 query) jadi **analis otonom**: satu tombol
+"Generate Insight Report" yang menjalankan loop mandiri:
+profil → rumuskan sendiri pertanyaan menarik → eksekusi SQL + pandas → deteksi anomali (z-score) →
+render chart → sintesis laporan naratif (executive summary → temuan + grafik → rekomendasi).
+
+- **Reuse 100% komponen existing** (profiler, pandas sandbox, auto-chart, agent loop) — orchestration
+  layer, bukan dari nol.
+- **Demo "wow" 2 menit**, showcase agentic engineering (multi-step planning + orchestration), bisa
+  di-eval (tanam anomali di demo.db → apakah report menemukannya?), dan batu loncatan aman menuju
+  Arah B (tetap read-only).
+
+Alternatif yang dipertimbangkan: benchmark publik (BIRD/Spider) untuk angka yang dikenali;
+LLM-as-judge di eval untuk menilai kebenaran semantik (menyelesaikan masalah exact-match yang
+menghitung "extra column" sebagai FAIL).
+
+- [x] Implementasi `insight_report.py` + tab "🧠 Insight Report" di dashboard. Pipeline: profil → LLM plan (JSON) → execute SQL → deteksi anomali (z-score) → LLM sintesis → laporan naratif + download .md. 22 tests.
+
+---
+
 ## Urutan eksekusi yang disarankan
 
 > Semua item prioritas tinggi sudah selesai per 2026-06-12. Yang tersisa adalah tier 2 opsional.
