@@ -16,6 +16,8 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 - **Talk to any SQLite or PostgreSQL database** — point it at any `.db` file or Supabase connection string, no schema configuration needed
 - **Auto data-profiling** — on connect, profiles every table (row count, null %, distinct count, min/max, semantic type) and injects the summary into the system prompt
 - **Sandboxed pandas analysis** — `run_analysis` tool executes Python/pandas on SQL results for correlation, z-score anomaly detection, distribution stats — all sandboxed (no filesystem/network/subprocess access)
+- **Autonomous Insight Report** — one click: the agent profiles the data, plans its own analytical questions, executes SQL, detects anomalies, and writes a full narrative report — no manual prompting
+- **Data classification (read-only)** — upload new/unknown tabular data and the router recommends which existing table it matches, with a confidence score and column mapping; never writes to the database
 - **Domain packs** — drop a `.md` file in `domains/` to give the agent specialist knowledge (glossary, query patterns, pitfalls)
 - **Hybrid knowledge** — database-first for internal data, Tavily web search for benchmarks, definitions, and external context
 - **Self-correcting** — query errors return a `hint` that the agent uses to fix and retry
@@ -69,10 +71,12 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 | `database.py` | Dual-engine DB layer — SQLite local / PostgreSQL (Supabase) in cloud; query validation, schema introspection |
 | `profiler.py` | Auto data-profiling — row counts, null %, cardinality, min/max; cached by file mtime or Postgres URL |
 | `analysis.py` | Sandboxed pandas executor — runs Python code on SQL DataFrames inside a restricted namespace |
+| `insight_report.py` | Autonomous analyst pipeline — profiles data, plans its own questions, runs SQL + anomaly detection, writes a narrative report |
+| `router.py` | Catalog + classifier (read-only) — matches new/uploaded data to the most likely existing table with a confidence score |
 | `web_search.py` | Tavily API integration for external web search |
 | `ui.py` | All presentation logic (rich-based) — panels, tables, spinners, markdown |
 | `logger.py` | Per-session JSONL logger |
-| `dashboard.py` | Streamlit web dashboard — Chat, DB Explorer, Session History, Analytics |
+| `dashboard.py` | Streamlit web dashboard — Chat, Insight Report, Data Classification, DB Explorer, Session History, Analytics |
 | `domains/` | Domain pack files (`*.md`) — specialist knowledge injected into the system prompt |
 | `data/` | SQLite database files (gitignored, except `demo.db`) |
 | `logs/` | Per-session log files (gitignored) |
@@ -118,15 +122,19 @@ streamlit run dashboard.py
 # Opens at http://localhost:8501
 ```
 
-### Dashboard tabs
+### Dashboard pages
 
-| Tab | Description |
+| Page | Description |
 |---|---|
 | 📊 **Dashboard** | KPI overview, SOH/capacity charts, session table |
 | 💬 **Chat** | Talk to the agent in-browser; SQL results auto-visualized as charts |
+| 🧠 **Insight Report** | One button → autonomous analyst pipeline plans its own questions, runs SQL, detects anomalies, writes a full narrative report (downloadable as `.md`) |
+| 🧩 **Klasifikasi Data** | Upload a CSV or paste tabular data → the router classifier recommends which existing table it matches, with a confidence score and column mapping (read-only — no insert) |
 | 🗄️ **DB Explorer** | Schema browser, data preview, quick charts |
 | 📋 **Riwayat Sesi** | Browse all session logs with full Q&A timeline |
 | 📈 **Analytics** | Aggregate stats — tool usage, token breakdown, session comparison |
+
+Light/dark mode toggle available in the sidebar (`.streamlit/config.toml` forces a light base theme by default to avoid unreadable chat bubbles on Streamlit Cloud's default dark theme).
 
 ### Auto-chart generation
 
@@ -200,6 +208,8 @@ The agent has four tools and uses them based on the question type:
 | Correlation, anomaly detection, trend, distribution | `run_analysis` | Runs Python/pandas on SQL results in a sandbox |
 | External benchmarks, definitions, typical values | `web_search` | Only when data is not in the database |
 | "Is our data normal?" | `execute_sql` + `web_search` | Both: SQL → web → combine and label sources |
+
+> `insight_report.py` and `router.py` are separate orchestration pipelines (triggered by a dashboard button, not LLM tool calls) that reuse these same building blocks — `profiler.py`, `execute_query`, and the same OpenRouter client.
 
 Web search is **optional** — if `TAVILY_API_KEY` is not set, the agent operates in DB-only mode.
 
@@ -392,10 +402,14 @@ universal-sql-agent/
 ├── database.py             # dual-engine DB layer (SQLite + PostgreSQL)
 ├── profiler.py             # auto data-profiling, cached by mtime/URL
 ├── analysis.py             # sandboxed pandas executor
+├── insight_report.py       # autonomous analyst report pipeline
+├── router.py               # data-to-table catalog + classifier (read-only)
 ├── web_search.py           # Tavily web search integration
 ├── ui.py                   # rich-based presentation
 ├── logger.py               # JSONL session logger
 ├── dashboard.py            # Streamlit web dashboard
+├── .streamlit/
+│   └── config.toml         # forces light theme on Streamlit Cloud
 ├── domains/
 │   ├── battery.md          # domain pack: Li-ion battery research
 │   └── ecommerce.md        # domain pack: e-commerce / retail
@@ -410,7 +424,9 @@ universal-sql-agent/
 │   ├── test_agent.py
 │   ├── test_tools.py
 │   ├── test_analysis.py
-│   └── test_profiler.py
+│   ├── test_profiler.py
+│   ├── test_insight_report.py
+│   └── test_router.py
 ├── .github/
 │   └── workflows/
 │       └── tests.yml       # CI: pytest on every push

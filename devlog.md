@@ -2,6 +2,113 @@
 
 ---
 
+## 2026-06-16 — Session 23: Dashboard Redesign + Router B1 UI Integration
+
+### Yang dikerjakan
+
+**Redesign total `dashboard.py`** — dari layout tab-atas ke sidebar navigation custom (referensi Figma admin dashboard):
+- Sidebar: logo, nav button per halaman (`st.session_state.page` + `if/elif` routing, bukan native tabs), DB/domain selector, status card agent aktif (gradient ungu), tombol Reset Chat
+- Custom CSS: gradient background, card putih rounded-shadow untuk KPI/chart/dataframe/expander, page header dengan badge tanggal
+- Halaman: Dashboard (KPI + chart overview), Chat, DB Explorer, Riwayat Sesi, Analytics
+
+**Dark mode toggle:**
+- `.streamlit/config.toml` baru — `base = "light"` eksplisit. Fix root cause: Streamlit Community Cloud default ke dark mode, bikin chat bubble nyaris tidak terbaca (dilaporkan user via screenshot) karena CSS custom hanya override sebagian komponen
+- `_DARK_CSS` string + toggle button di sidebar (`st.session_state.dark`) — inject override di atas light CSS saat aktif
+- `fmt()` / `_layout()` chart helper jadi theme-aware (gridline & font color berubah sesuai `st.session_state.dark`)
+
+**Auto-chart generation di Chat:**
+- `auto_chart(df)` — heuristik pilih tipe chart dari shape hasil SQL: ada kolom waktu/cycle → line chart (melt kalau multi-metric), kategori+numerik → bar chart, dua kolom numerik → scatter. Skip kalau <2 baris atau tidak ada kolom numerik (mis. `COUNT(*)` tunggal)
+- `_show_auto_chart()` — re-run SQL terakhir dari tool call log (bukan `result_preview` yang terpotong 500 char), tampilkan di expander "📈 Visualisasi Otomatis" — baik untuk respons baru maupun saat scroll riwayat chat lama
+
+**Halaman baru "🧩 Klasifikasi Data" — UI untuk `router.py` (B1, menutup scope yang di-defer di Session 22):**
+- Katalog dibangun via `build_catalog(domain=sel_dom)`, di-cache di `st.session_state.catalog` (rebuild otomatis kalau domain pack berubah, tombol manual "🔄 Refresh")
+- Input data: upload CSV atau paste teks (parse via `pd.read_csv(io.StringIO(...))`)
+- Preview data sebelum klasifikasi
+- Tombol "🔍 Klasifikasi" → `classify_data(df, catalog)`, hasil disimpan di session_state agar tidak hilang saat rerun
+- Hasil: badge confidence berwarna (hijau >80%, kuning 50–80%, merah <50%/`is_new_table_needed`), `reasoning` sebagai teks, `column_mapping` sebagai tabel (+ highlight kolom yang tidak terpetakan), `candidates` di expander terpisah untuk transparency
+- **Sengaja tidak ada tombol simpan/insert** — read-only sesuai prinsip B1, jalur write (B2/B3) belum diimplementasikan
+
+### Hasil
+- `dashboard.py` punya 7 halaman: Dashboard, Chat, Insight Report, Klasifikasi Data, DB Explorer, Riwayat Sesi, Analytics
+- Router B1 (`router.py`, Session 22) sekarang demoable end-to-end dari UI, tidak hanya via Python API
+- Verifikasi: `python -m py_compile dashboard.py` clean; `import router` clean (dependensi `profiler.py`/`agent.py` resolve)
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `dashboard.py` | Redesign sidebar nav + CSS; dark mode toggle; `auto_chart()`/`_show_auto_chart()`; halaman baru "Klasifikasi Data" |
+| `.streamlit/config.toml` | File baru — force `base = "light"`, brand color |
+
+---
+
+## 2026-06-13 — Session 22: Catalog + Router Classifier (Arah B1)
+
+### Yang dikerjakan
+
+**`router.py`** — klasifikasi data baru ke tabel yang cocok, READ-ONLY (tidak menulis apa pun):
+- `build_catalog(domain=None)` — wraps `profile_database()`; normalisasi `columns` dari dict
+  `{col_name: {...}}` jadi list `[{"name": ..., ...}]` agar konsisten dipakai modul lain
+- Heuristik (murni, tanpa LLM, testable):
+  - `_column_name_similarity()` — Jaccard similarity nama kolom (normalized)
+  - `_type_compatibility()` — numeric vs categorical/text match
+  - `_value_overlap()` — overlap set nilai kategorikal, atau range numerik
+  - `_composite_score()` — weighted (nama 50%, tipe 30%, value 20%)
+- `_rank_candidates()` → semua tabel diberi skor, diurutkan
+- `classify_data(df, catalog)` → top-3 heuristik dikirim ke LLM judge → confidence final +
+  reasoning + column mapping + `is_new_table_needed`. Fallback ke skor heuristik kalau LLM
+  judge gagal parse JSON.
+
+**Bug fix `profiler.py`** ditemukan saat verifikasi end-to-end terhadap Supabase:
+`ROUND(AVG(col), 4)` crash di Postgres (`function round(double precision, integer) does not
+exist`) — sama persis pola bug eval bat_019/bat_020 sebelumnya, tapi kali ini di kode produksi
+`_profile_column()`, bukan eval case. Fix: cast `::numeric` kalau engine Postgres.
+
+**Tests** — `tests/test_router.py`, 31 tests, semua heuristik diuji murni tanpa LLM/DB,
+`classify_data()` dengan LLM dimock.
+
+**Verifikasi end-to-end** dengan LLM nyata terhadap Supabase (demo battery data):
+- Data battery_id/soh/cycle → `battery_cycles`, confidence 100%, mapping benar
+- Data customer/invoice (tidak terkait) → `best_match: None`, `is_new_table_needed: True`
+
+**Scope keputusan:** UI dashboard (upload CSV + tombol klasifikasi) ditangani oleh agent lain
+yang fokus ke `dashboard.py` — sesi ini hanya core logic `router.py`.
+
+### Hasil
+- 220 tests passed (189 + 31 baru)
+- Bug profiler.py Postgres ditemukan & fixed sebelum sempat jadi masalah produksi
+
+---
+
+## 2026-06-13 — Session 21: Insight Report Mode (Arah C)
+
+### Yang dikerjakan
+
+**`insight_report.py`** — pipeline analis otonom 5 langkah:
+1. `profile_database()` → konteks profil
+2. LLM plan (JSON) → 6 pertanyaan analitik + SQL, mencakup summary/trend/comparison/ranking/anomaly/computed
+3. `execute_query()` per pertanyaan → raw rows
+4. `_detect_anomaly()` → z-score > 2.5σ per kolom numerik
+5. LLM sintesis → ringkasan eksekutif + temuan + rekomendasi (markdown, Bahasa Indonesia)
+
+`_extract_json()` menangani markdown code fence dan prose tambahan dari LLM sebelum `json.loads()`.
+
+**Dashboard** — tab baru "🧠 Insight Report": tombol generate dengan progress callback live, expander per temuan (tabel + auto-chart + SQL), badge anomali, download laporan sebagai `.md`.
+
+**Tests** — `tests/test_insight_report.py`, 22 tests (semua mocked, tidak hit API/DB asli):
+`_extract_json`, `_summarize_rows`, `_detect_anomaly`, `generate_report` end-to-end dengan LLM+DB di-patch.
+
+**Verifikasi end-to-end** dengan LLM nyata terhadap `demo.db` (3 pertanyaan):
+- 0 error, 1 anomali terdeteksi (suhu discharge B1/B2 >15°C lebih tinggi dari charge)
+- LLM merumuskan sendiri window function (`FIRST_VALUE`) untuk hitung degradasi
+- Ringkasan & rekomendasi referensikan angka spesifik (SOH ~85%, RUL terendah B2)
+
+### Hasil
+- 189 tests passed (167 + 22 baru)
+- Fitur differentiating utama untuk portfolio — "satu tombol, laporan lengkap" vs text-to-SQL biasa
+
+---
+
 ## 2026-06-12 — Session 20: Eval Re-run + README Accuracy Update
 
 ### Yang dikerjakan

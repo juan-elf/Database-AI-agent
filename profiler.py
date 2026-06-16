@@ -167,7 +167,11 @@ def _profile_column(
 
     if is_numeric:
         base["semantic_type"] = "numeric"
-        cursor.execute(f'SELECT MIN({c}), MAX({c}), ROUND(AVG({c}), 4) FROM {t}')
+        # Postgres has no ROUND(double precision, int) overload — needs an
+        # explicit ::numeric cast. SQLite has no such cast syntax, so it's
+        # only applied for the Postgres engine.
+        avg_expr = f"ROUND(AVG({c})::numeric, 4)" if _use_postgres() else f"ROUND(AVG({c}), 4)"
+        cursor.execute(f'SELECT MIN({c}), MAX({c}), {avg_expr} FROM {t}')
         r = cursor.fetchone()
         if r:
             base["min"] = r[0]

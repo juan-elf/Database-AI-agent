@@ -180,8 +180,12 @@ Arsitektur write yang aman (kalau diimplementasikan):
 | **B3** | Input conversational lewat agent → jalur write yang sama | Sedang |
 | **B4** | Bikin tabel baru / schema evolution | Tinggi — **defer** |
 
-- [ ] **B1 — Catalog + router classifier (READ-ONLY).** Titik mulai paling aman & bernilai.
-  Fitur kuat tanpa menulis apa pun. Reuse `profiler.py`.
+- [x] **B1 — Catalog + router classifier (READ-ONLY).** `router.py`: `build_catalog()`
+  (reuse `profiler.py`) + `classify_data(df, catalog)` — heuristik (Jaccard nama kolom,
+  type compatibility, value/range overlap) filter top-3, lalu LLM judge untuk confidence +
+  column mapping final. 31 tests. Verified end-to-end: data cocok → 100% confidence +
+  mapping benar; data tidak cocok → `is_new_table_needed=True`. UI dashboard ditangani
+  terpisah (bukan scope sesi ini).
 - [ ] **B2 — Upload CSV → confirmed append.** Jalur write aman pertama (typed insert tool +
   transaction + audit + konfirmasi).
 - [ ] **B3 — Conversational insert** lewat jalur write yang sama.

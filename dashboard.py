@@ -1,6 +1,7 @@
 """
 dashboard.py — Universal SQL Agent Dashboard (Redesigned)
 """
+import io
 import json
 import os
 import re
@@ -396,12 +397,13 @@ with st.sidebar:
         st.session_state.page = "dashboard"
 
     NAV = [
-        ("📊", "Dashboard",    "dashboard"),
-        ("💬", "Chat",         "chat"),
+        ("📊", "Dashboard",      "dashboard"),
+        ("💬", "Chat",           "chat"),
         ("🧠", "Insight Report", "report"),
-        ("🗄️", "DB Explorer",  "explorer"),
-        ("📋", "Riwayat Sesi", "history"),
-        ("📈", "Analytics",    "analytics"),
+        ("🧩", "Klasifikasi Data", "classify"),
+        ("🗄️", "DB Explorer",    "explorer"),
+        ("📋", "Riwayat Sesi",   "history"),
+        ("📈", "Analytics",      "analytics"),
     ]
     for icon, label, key in NAV:
         active = st.session_state.page == key
@@ -1067,3 +1069,153 @@ elif page == "report":
                 mime="text/markdown",
                 key="download_report",
             )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KLASIFIKASI DATA (router.py — read-only schema matching)
+# ─────────────────────────────────────────────────────────────────────────────
+elif page == "classify":
+    page_header("Klasifikasi Data", "Cocokkan data baru dengan tabel yang ada — read-only, tidak menulis")
+
+    if "agent" not in st.session_state:
+        st.markdown("""
+        <div style="background:#F8F5FF;border-radius:16px;padding:32px;text-align:center;
+                    border:1.5px dashed #D0C0FF;margin-top:24px;">
+            <div style="font-size:36px;margin-bottom:12px;">🧩</div>
+            <div style="font-size:14px;color:#7C5CFC;font-weight:600;">
+                Inisialisasi agent dulu di sidebar untuk membangun katalog tabel.
+            </div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#F0EBFF,#EBF3FF);border-radius:16px;
+                    padding:20px 24px;margin-bottom:20px;border:1px solid #E0D5FF;">
+            <div style="font-size:15px;font-weight:700;color:#4A3A8A;margin-bottom:6px;">
+                🧭 Cara kerja
+            </div>
+            <div style="font-size:13px;color:#5A4A9A;line-height:1.7;">
+                Upload atau paste data baru → dibandingkan dengan semua tabel yang ada
+                (nama kolom, tipe, rentang nilai) → LLM menentukan tabel paling cocok,
+                confidence, dan pemetaan kolom.
+                <br><strong>Tidak ada data yang ditulis ke database.</strong>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        # ── Build / cache catalog ───────────────────────────────────────────────
+        cur_domain = sel_dom
+        if (st.session_state.get("catalog") is None
+                or st.session_state.get("catalog_domain") != cur_domain):
+            with st.spinner("Membangun katalog tabel..."):
+                from router import build_catalog
+                st.session_state.catalog = build_catalog(domain=cur_domain)
+                st.session_state.catalog_domain = cur_domain
+
+        catalog = st.session_state.catalog
+
+        cat_col, btn_col = st.columns([4, 1])
+        with cat_col:
+            st.caption(f"📚 Katalog: {len(catalog)} tabel — {', '.join(catalog.keys()) or '(kosong)'}")
+        with btn_col:
+            if st.button("🔄 Refresh", use_container_width=True, key="refresh_catalog"):
+                from router import build_catalog
+                st.session_state.catalog = build_catalog(domain=cur_domain)
+                st.rerun()
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # ── Data input ───────────────────────────────────────────────────────────
+        input_method = st.radio("Sumber data", ["Upload CSV", "Paste teks"],
+                                horizontal=True, label_visibility="collapsed")
+
+        df_input = None
+        if input_method == "Upload CSV":
+            uploaded = st.file_uploader("Upload file CSV", type=["csv"], key="classify_upload")
+            if uploaded is not None:
+                try:
+                    df_input = pd.read_csv(uploaded)
+                except Exception as e:
+                    st.error(f"Gagal membaca CSV: {e}")
+        else:
+            pasted = st.text_area("Paste data (format CSV, baris pertama = header)",
+                                  height=140, key="classify_paste",
+                                  placeholder="battery_id,cycle,temp_charge\nB9,1,24.1\nB9,2,24.6")
+            if pasted.strip():
+                try:
+                    df_input = pd.read_csv(io.StringIO(pasted))
+                except Exception as e:
+                    st.error(f"Gagal parse teks: {e}")
+
+        if df_input is not None and not df_input.empty:
+            st.markdown('<div class="s-card"><div class="s-title">Preview Data</div>', unsafe_allow_html=True)
+            st.dataframe(df_input.head(10), use_container_width=True)
+            st.caption(f"{len(df_input)} baris · {len(df_input.columns)} kolom")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+            if st.button("🔍  Klasifikasi", type="primary", use_container_width=True, key="classify_btn"):
+                with st.spinner("Mengklasifikasi data... (~5-10s, memanggil LLM)"):
+                    from router import classify_data
+                    st.session_state.classify_result = classify_data(df_input, catalog)
+                    st.session_state.classify_input_cols = list(df_input.columns)
+
+        # ── Display result ──────────────────────────────────────────────────────
+        if "classify_result" in st.session_state:
+            result = st.session_state.classify_result
+            conf = result.get("confidence", 0)
+            needs_new = result.get("is_new_table_needed", False)
+
+            if needs_new or conf < 50:
+                badge_bg = "#FEE2E2"; badge_fg = "#DC2626"
+            elif conf < 80:
+                badge_bg = "#FEF3C7"; badge_fg = "#D97706"
+            else:
+                badge_bg = "#DCFCE7"; badge_fg = "#16A34A"
+
+            best = result.get("best_match") or "Tidak ada tabel cocok"
+
+            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="s-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
+                    <div>
+                        <div class="s-sub" style="margin-bottom:2px;">TABEL REKOMENDASI</div>
+                        <div style="font-size:20px;font-weight:800;color:#1A1A2E;">🎯 {best}</div>
+                    </div>
+                    <div style="background:{badge_bg};color:{badge_fg};border-radius:20px;
+                                padding:10px 20px;font-weight:800;font-size:20px;white-space:nowrap;">
+                        {conf}%
+                    </div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            if needs_new:
+                st.warning("⚠️ Tidak ada tabel yang cukup cocok — data ini mungkin perlu tabel baru "
+                           "(belum didukung — lihat roadmap B4 di `plan.md`).")
+
+            if result.get("reasoning"):
+                st.markdown(f"""
+                <div class="s-card">
+                    <div class="s-title">Alasan</div>
+                    <div style="color:#555;font-size:14px;line-height:1.65;">{result['reasoning']}</div>
+                </div>""", unsafe_allow_html=True)
+
+            mapping = result.get("column_mapping", {})
+            if mapping:
+                st.markdown('<div class="s-card"><div class="s-title">Pemetaan Kolom</div>', unsafe_allow_html=True)
+                map_df = pd.DataFrame([
+                    {"Kolom Input": k, "→": "→", "Kolom Tabel": v}
+                    for k, v in mapping.items()
+                ])
+                st.dataframe(map_df, use_container_width=True, hide_index=True)
+                input_cols = set(st.session_state.get("classify_input_cols", []))
+                unmapped = input_cols - set(mapping.keys())
+                if unmapped:
+                    st.caption(f"⚠️ Tidak terpetakan: {', '.join(sorted(unmapped))}")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            candidates = result.get("candidates", [])
+            if candidates:
+                with st.expander(f"📋 Semua kandidat ({len(candidates)} tabel, skor heuristik)"):
+                    cand_df = pd.DataFrame(candidates)
+                    st.dataframe(cand_df, use_container_width=True, hide_index=True)
