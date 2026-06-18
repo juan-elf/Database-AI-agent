@@ -17,11 +17,11 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 - **Auto data-profiling** — on connect, profiles every table (row count, null %, distinct count, min/max, semantic type) and injects the summary into the system prompt
 - **Sandboxed pandas analysis** — `run_analysis` tool executes Python/pandas on SQL results for correlation, z-score anomaly detection, distribution stats — all sandboxed (no filesystem/network/subprocess access)
 - **Autonomous Insight Report** — one click: the agent profiles the data, plans its own analytical questions, executes SQL, detects anomalies, and writes a full narrative report — no manual prompting
-- **Data classification (read-only)** — upload new/unknown tabular data and the router recommends which existing table it matches, with a confidence score and column mapping; never writes to the database
+- **Data classification + safe append** — upload a CSV, the router recommends which existing table it matches (confidence score + column mapping); if confidence ≥ 80% a preview appears and the user can confirm to append — write path is fully separate from the read path, LLM never emits SQL, every insert is wrapped in a transaction and logged to an audit JSONL
 - **Domain packs** — drop a `.md` file in `domains/` to give the agent specialist knowledge (glossary, query patterns, pitfalls)
 - **Hybrid knowledge** — database-first for internal data, Tavily web search for benchmarks, definitions, and external context
 - **Self-correcting** — query errors return a `hint` that the agent uses to fix and retry
-- **Safe by design** — only `SELECT`/`WITH` allowed; engine-level read-only (`mode=ro` for SQLite, `GRANT SELECT` role for Postgres); multi-statement blocked; identifier validation
+- **Safe by design** — engine-level read-only enforcement; SQL whitelist/blacklist; AI guardrails (`guardrails.py`) with explicit trust boundary: all DB rows, web results, CSV uploads, and query results are tagged as `<untrusted_data>` before reaching the LLM; jailbreak/injection patterns blocked pre-LLM; system prompt leak detection post-LLM
 - **Pretty CLI** — `rich`-based tables, syntax-highlighted SQL, web result panels, spinners, markdown rendering
 - **Observability** — every session logged to JSONL
 - **Auto-chart generation** — SQL results with numeric/time-series data are automatically visualized as charts in the dashboard chat
@@ -72,7 +72,9 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 | `profiler.py` | Auto data-profiling — row counts, null %, cardinality, min/max; cached by file mtime or Postgres URL |
 | `analysis.py` | Sandboxed pandas executor — runs Python code on SQL DataFrames inside a restricted namespace |
 | `insight_report.py` | Autonomous analyst pipeline — profiles data, plans its own questions, runs SQL + anomaly detection, writes a narrative report |
-| `router.py` | Catalog + classifier (read-only) — matches new/uploaded data to the most likely existing table with a confidence score |
+| `router.py` | Catalog + classifier — matches new/uploaded data to the most likely existing table with a confidence score and column mapping |
+| `writer.py` | Write module — `validate_insert`, `preview_insert`, `execute_insert` (parameterized SQL, transaction, row guard, audit JSONL); Postgres requires `WRITE_DATABASE_URL` |
+| `guardrails.py` | AI security layer — `harden_system_prompt`, `wrap_untrusted`, `check_input`, `check_output`; enforces explicit trust boundary between code and LLM |
 | `web_search.py` | Tavily API integration for external web search |
 | `ui.py` | All presentation logic (rich-based) — panels, tables, spinners, markdown |
 | `logger.py` | Per-session JSONL logger |
@@ -108,6 +110,11 @@ TAVILY_API_KEY=tvly-xxxxx        # optional — enables web search
 
 # Optional — if set, agent connects to Postgres instead of SQLite
 DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+# Optional — enables the CSV append write path (Postgres only)
+# Same connection string as DATABASE_URL; role needs INSERT in addition to SELECT
+# Run: GRANT INSERT ON <table> TO <role>; in Supabase first
+WRITE_DATABASE_URL=postgresql://user:password@host:5432/dbname
 ```
 
 ---
@@ -129,7 +136,7 @@ streamlit run dashboard.py
 | 📊 **Dashboard** | KPI overview, SOH/capacity charts, session table |
 | 💬 **Chat** | Talk to the agent in-browser; SQL results auto-visualized as charts |
 | 🧠 **Insight Report** | One button → autonomous analyst pipeline plans its own questions, runs SQL, detects anomalies, writes a full narrative report (downloadable as `.md`) |
-| 🧩 **Klasifikasi Data** | Upload a CSV or paste tabular data → the router classifier recommends which existing table it matches, with a confidence score and column mapping (read-only — no insert) |
+| 🧩 **Klasifikasi Data** | Upload a CSV or paste tabular data → router classifier recommends the best matching table (confidence score + column mapping) → if confidence ≥ 80% a row preview appears and the user can confirm to append (requires `WRITE_DATABASE_URL`) |
 | 🗄️ **DB Explorer** | Schema browser, data preview, quick charts |
 | 📋 **Riwayat Sesi** | Browse all session logs with full Q&A timeline |
 | 📈 **Analytics** | Aggregate stats — tool usage, token breakdown, session comparison |
@@ -217,15 +224,30 @@ Web search is **optional** — if `TAVILY_API_KEY` is not set, the agent operate
 
 ---
 
-## Query Safety
+## Security
+
+### SQL safety (read path)
 
 The database tool is **read-only** with defense-in-depth:
 
-1. **Engine-level read-only** *(strongest layer)* — SQLite opened with `mode=ro` URI flag; PostgreSQL connected via a role with `GRANT SELECT` only (`set_session(readonly=True)`) — write is impossible even if all app checks are bypassed
+1. **Engine-level read-only** *(strongest layer)* — SQLite opened with `mode=ro` URI flag; PostgreSQL connected via a role with `GRANT SELECT` only and `set_session(readonly=True)` — write is impossible even if all app checks are bypassed
 2. **Whitelist** — only `SELECT` / `WITH` is allowed at the app layer
 3. **Blacklist** — `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `REPLACE`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM` are rejected
 4. **No multi-statement** — `SELECT 1; SELECT 2` is rejected
-5. **Identifier validation** — table/column names in `get_distinct_values` are validated against `^[a-zA-Z_][a-zA-Z0-9_]*$`
+5. **Identifier validation** — table/column names validated against `^[a-zA-Z_][a-zA-Z0-9_]*$`
+
+### AI guardrails (`guardrails.py`)
+
+**Trust model:** only Python application code is trusted. The LLM model and all external data are treated as untrusted.
+
+**Threat:** indirect prompt injection — malicious content in DB rows, web results, CSV uploads, or query results instructs the model to behave unexpectedly.
+
+| Layer | Mechanism | Where applied |
+|---|---|---|
+| **Tier 1 — Trust boundary** | `harden_system_prompt()` appends an explicit `SECURITY GUARDRAILS` block: all `<untrusted_data>` content is DATA, not instructions; scope/refusal rules; no write SQL generation | `agent.py:build_system_prompt()` |
+| **Tier 1 — Data delimiting** | `wrap_untrusted(data, source)` tags every external content block with `<untrusted_data source="...">` before it enters LLM context | DB sample rows, web results, CSV upload, query results |
+| **Tier 2 — Input check (pre-LLM)** | `check_input(text)` blocks 20 jailbreak/injection patterns (case-insensitive) and rejects inputs > 5,000 chars; CSV to router capped at 2,000 chars | `agent.py:chat()`, `router.py:classify_data()` |
+| **Tier 3 — Output check (post-LLM)** | `check_output(text)` detects verbatim system-prompt markers in model output — signals potential prompt leakage | Available; callers log and suppress |
 
 ---
 
@@ -234,6 +256,8 @@ The database tool is **read-only** with defense-in-depth:
 Every session is logged to `logs/session_<timestamp>_<id>.jsonl` (JSON Lines format).
 
 Logged events: `session_start`, `user_message`, `tool_call`, `assistant_message`, `error`
+
+Write operations are logged separately to `logs/audit_YYYYMMDD.jsonl` — one entry per insert attempt with timestamp, session ID, table, columns, row count, and status (`success`/`failed`).
 
 Quick analysis with PowerShell:
 
@@ -363,15 +387,16 @@ Key constants in `agent.py`:
 
 ---
 
-## Roadmap: Safe Write Architecture (v2)
+## Safe Write Architecture (v2 — implemented in `writer.py`)
 
-Write operations are intentionally out of scope for v1 — read-only is the core safety guarantee. If write support is added in future, the safe architecture is:
+The analytics read path remains strictly read-only. The write path is a separate module (`writer.py`) with independent principles:
 
-1. **Separate connections** — analytics path uses read-only role; writes go through a separate connection that is never touched by the agent loop
-2. **Typed write tools, not raw SQL** — define `insert_row(table, values)` or domain-specific tools (e.g. `record_test_result(...)`). The app validates against schema and builds parameterized SQL. The LLM only fills parameters, never writes SQL directly
-3. **Human-in-the-loop** — the tool returns a *proposed change* (SQL + dry-run preview) for user confirmation before executing
-4. **Transaction guard** — wrap in a transaction; block if write affects > N rows without explicit override
-5. **Immutable audit log** — extend the JSONL logger: who, when, SQL, rows affected, before/after snapshot
+1. **Separate connection** — `WRITE_DATABASE_URL` env var keeps write and read connections completely distinct; analytics loop never touches the write connection
+2. **Parameterized SQL, not LLM-generated** — `execute_insert` builds `INSERT ... VALUES (%s, %s, ...)` from a validated column mapping; the LLM only recommends the routing, never emits SQL
+3. **Human-in-the-loop** — preview (row count + first 5 rows) is shown before any write; a single explicit "Konfirmasi & Simpan" button is required
+4. **Row count guard** — `validate_insert` blocks inserts > 500 rows unless `override_row_limit=True` is explicitly passed
+5. **Transaction + rollback** — all inserts are wrapped in a transaction; any error triggers automatic rollback
+6. **Immutable audit log** — every write attempt (success or failure) is appended to `logs/audit_YYYYMMDD.jsonl` with timestamp, session ID, table, columns, row count, and status
 
 ---
 
@@ -383,7 +408,7 @@ Write operations are intentionally out of scope for v1 — read-only is the core
 | **Context growth** | Conversation history is unbounded — very long sessions will eventually hit the model's context limit. | Planned fix |
 | **Schema injection** | Auto-profiler injects a compact summary (row counts, ranges, cardinality) instead of raw schema dump. Scalable to ~50 tables. | Implemented |
 | **SQL dialect** | Dialect rules (`_DIALECT_RULES`) injected dynamically based on detected engine (SQLite vs. Postgres). | Implemented |
-| **Write operations** | Read-only by design (engine-level: SQLite `mode=ro`, Postgres read-only role + `GRANT SELECT` only). No INSERT/UPDATE path. | Intentional — see roadmap for safe write architecture |
+| **Write operations** | CSV append implemented in `writer.py` (B2) — gated by `WRITE_DATABASE_URL`, human confirmation, row guard, transaction, audit log. Conversational insert (B3) and schema evolution (B4) not yet implemented. | B2 done; B3/B4 planned |
 | **Multi-tenancy** | Single database per session. No row-level security or multi-user isolation. | Out of scope for v1 |
 
 ---
@@ -403,7 +428,9 @@ universal-sql-agent/
 ├── profiler.py             # auto data-profiling, cached by mtime/URL
 ├── analysis.py             # sandboxed pandas executor
 ├── insight_report.py       # autonomous analyst report pipeline
-├── router.py               # data-to-table catalog + classifier (read-only)
+├── router.py               # data-to-table catalog + classifier
+├── writer.py               # safe CSV append — validate, preview, execute, audit
+├── guardrails.py           # AI security layer — trust boundary, injection detection
 ├── web_search.py           # Tavily web search integration
 ├── ui.py                   # rich-based presentation
 ├── logger.py               # JSONL session logger
@@ -426,7 +453,9 @@ universal-sql-agent/
 │   ├── test_analysis.py
 │   ├── test_profiler.py
 │   ├── test_insight_report.py
-│   └── test_router.py
+│   ├── test_router.py
+│   ├── test_writer.py
+│   └── test_guardrails.py
 ├── .github/
 │   └── workflows/
 │       └── tests.yml       # CI: pytest on every push
@@ -435,7 +464,8 @@ universal-sql-agent/
 │   ├── supabase_import.sql # PostgreSQL dump for Supabase import
 │   └── *.db                # other databases (gitignored)
 └── logs/
-    └── session_*.jsonl     # session logs (gitignored)
+    ├── session_*.jsonl     # session logs (gitignored)
+    └── audit_*.jsonl       # write audit trail (gitignored)
 ```
 
 ---

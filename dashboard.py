@@ -31,7 +31,7 @@ def _inject_secrets() -> None:
     """
     try:
         secrets = st.secrets
-        for key in ("OPENROUTER_API_KEY", "TAVILY_API_KEY", "DATABASE_URL"):
+        for key in ("OPENROUTER_API_KEY", "TAVILY_API_KEY", "DATABASE_URL", "WRITE_DATABASE_URL"):
             if not os.environ.get(key) and key in secrets:
                 os.environ[key] = secrets[key]
     except Exception:
@@ -1158,6 +1158,8 @@ elif page == "classify":
                     from router import classify_data
                     st.session_state.classify_result = classify_data(df_input, catalog)
                     st.session_state.classify_input_cols = list(df_input.columns)
+                    st.session_state.classify_input_df = df_input.copy()
+                    st.session_state.pop("insert_result", None)
 
         # ── Display result ──────────────────────────────────────────────────────
         if "classify_result" in st.session_state:
@@ -1219,3 +1221,72 @@ elif page == "classify":
                 with st.expander(f"📋 Semua kandidat ({len(candidates)} tabel, skor heuristik)"):
                     cand_df = pd.DataFrame(candidates)
                     st.dataframe(cand_df, use_container_width=True, hide_index=True)
+
+            # ── B2: Write section ─────────────────────────────────────────────
+            best_table = result.get("best_match")
+            write_ready = (
+                not needs_new
+                and conf >= 80
+                and best_table
+                and "classify_input_df" in st.session_state
+            )
+            if write_ready:
+                from writer import is_write_configured, preview_insert, execute_insert
+
+                df_to_write = st.session_state.classify_input_df
+                col_mapping  = result.get("column_mapping", {})
+                prev = preview_insert(df_to_write, best_table, col_mapping)
+
+                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+                if prev["valid"]:
+                    st.markdown(f"""
+                    <div class="s-card">
+                        <div class="s-title">📥 Tambah ke Database</div>
+                        <div style="color:#555;font-size:14px;line-height:1.7;">
+                            Siap menginsert <b>{prev['row_count']:,} baris</b> ke tabel
+                            <code>{best_table}</code>&nbsp;
+                            <span style="color:#16A34A;font-weight:600;">(confidence {conf}%)</span>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+
+                    with st.expander(f"👁️ Preview {len(prev['preview_df'])} baris pertama"):
+                        st.dataframe(prev["preview_df"], use_container_width=True, hide_index=True)
+
+                    for w in prev.get("warnings", []):
+                        st.caption(f"⚠️ {w}")
+
+                    if "insert_result" in st.session_state:
+                        ir = st.session_state.insert_result
+                        if ir["success"]:
+                            st.success(
+                                f"✅ {ir['rows_inserted']:,} baris berhasil diinsert ke `{ir['table']}`."
+                            )
+                            if ir.get("audit_file"):
+                                st.caption(f"Audit log: `{ir['audit_file']}`")
+                        else:
+                            st.error(f"Insert gagal: {'; '.join(ir['errors'])}")
+
+                    elif not is_write_configured():
+                        st.info(
+                            "💡 Write belum dikonfigurasi. Tambahkan `WRITE_DATABASE_URL` di `.env` "
+                            "dan jalankan `GRANT INSERT ON <tabel> TO agent_user;` di Supabase."
+                        )
+                    else:
+                        sid = "dashboard"
+                        try:
+                            sid = st.session_state.agent.logger.session_id
+                        except Exception:
+                            pass
+                        if st.button(
+                            f"✅ Konfirmasi & Simpan {prev['row_count']:,} baris ke `{best_table}`",
+                            type="primary",
+                            use_container_width=True,
+                            key="confirm_insert_btn",
+                        ):
+                            with st.spinner("Menyimpan ke database..."):
+                                st.session_state.insert_result = execute_insert(
+                                    df_to_write, best_table, col_mapping, session_id=sid
+                                )
+                            st.rerun()
+                else:
+                    st.error(f"Preview gagal: {'; '.join(prev['errors'])}")

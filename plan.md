@@ -186,8 +186,12 @@ Arsitektur write yang aman (kalau diimplementasikan):
   column mapping final. 31 tests. Verified end-to-end: data cocok → 100% confidence +
   mapping benar; data tidak cocok → `is_new_table_needed=True`. UI dashboard ditangani
   terpisah (bukan scope sesi ini).
-- [ ] **B2 — Upload CSV → confirmed append.** Jalur write aman pertama (typed insert tool +
-  transaction + audit + konfirmasi).
+- [x] **B2 — Upload CSV → confirmed append.** `writer.py`: `is_write_configured()`,
+  `get_write_connection()` (WRITE_DATABASE_URL untuk Postgres, read-write SQLite lokal),
+  `validate_insert()` (row guard 500 baris, validasi kolom), `preview_insert()`, `execute_insert()`
+  (transaksi + rollback on error + audit JSONL). Dashboard: write section muncul di halaman
+  Klasifikasi Data setelah confidence ≥ 80% — preview baris → tombol "Konfirmasi & Simpan".
+  Jika WRITE_DATABASE_URL belum di-set, tampilkan info instruksi alih-alih tombol. 28 tests.
 - [ ] **B3 — Conversational insert** lewat jalur write yang sama.
 - [ ] **B4 — New-table creation / schema evolution.** Defer; paling berisiko.
 
@@ -216,6 +220,62 @@ LLM-as-judge di eval untuk menilai kebenaran semantik (menyelesaikan masalah exa
 menghitung "extra column" sebagai FAIL).
 
 - [x] Implementasi `insight_report.py` + tab "🧠 Insight Report" di dashboard. Pipeline: profil → LLM plan (JSON) → execute SQL → deteksi anomali (z-score) → LLM sintesis → laporan naratif + download .md. 22 tests.
+
+---
+
+## FITUR — Arah D: AI Guardrails (prioritas berikutnya, ditambahkan 2026-06-17)
+
+> Status awal: **belum ada guardrail AI sama sekali.** Tidak ada penanganan injeksi, tidak ada
+> aturan scope/refusal di system prompt, data tak-tepercaya (web search, sample rows, CSV upload,
+> hasil query) mengalir mentah ke prompt.
+
+### Prinsip (trust boundary)
+
+Lapisan **tool** sudah aman secara deterministik (SQL `mode=ro`/`GRANT SELECT`, write butuh
+konfirmasi manusia, sandbox pandas, truncation 50 baris, `MAX_ITERATIONS`). Itu aset terkuat:
+model di-jailbreak pun tidak bisa menulis/DROP. **Prinsip guardrail: jangan andalkan model
+"berkelakuan baik" — enforce di kode.** Model + semua data = tak tepercaya; hanya kode Python =
+tepercaya. Guardrail level-model (aturan di prompt) = defense-in-depth, bukan pertahanan utama.
+
+### Ancaman dominan: Indirect Prompt Injection (empat vektor terbuka)
+
+| Vektor | Lokasi | Risiko |
+|--------|--------|--------|
+| Sample rows DB → system prompt | `database.py:186` | Cell berisi instruksi tersembunyi masuk prompt |
+| Hasil web search → LLM | `web_search.py` | Konten web = injeksi klasik |
+| **CSV upload → LLM judge** | `router.py:248` | **100% dikontrol penyerang**, memengaruhi keputusan routing (calon write) |
+| Hasil query → sintesis report | `insight_report.py` | Data mengalir ke LLM kedua |
+
+CSV→router paling kritis: upload sepenuhnya untrusted, langsung masuk judge penentu tabel tujuan.
+
+### Rencana (urut ROI)
+
+**🥇 Tier 1 — Pemisahan data/instruksi (paling murah, paling relevan)**
+- [x] Blok guardrail di system prompt: `harden_system_prompt()` menambahkan blok
+  "SECURITY GUARDRAILS / TRUST BOUNDARY" + aturan eksplisit di akhir system prompt.
+- [x] **Delimit** semua konten untrusted dengan `wrap_untrusted(data, source)`:
+  sample rows DB, web results (answer + content), CSV sample di router, query results di report.
+- [x] Pertegas backstop deterministik: gate konfirmasi write tak boleh bisa di-trigger model
+  (sudah begitu — tombol manusia ✅).
+
+**🥈 Tier 2 — Input guardrail (pra-LLM)**
+- [x] `guardrails.py`: `check_input(text, max_length) -> (allow, reason)` — 20 pola injeksi
+  (case-insensitive) + cap panjang 5.000 karakter. Dipanggil di `Agent.chat()` (pesan user)
+  dan `router.classify_data()` (CSV, cap 2.000 karakter).
+- [x] Cap panjang input: 5.000 karakter untuk pesan user, 2.000 untuk CSV ke router judge.
+
+**🥉 Tier 3 — Output guardrail (pasca-LLM)**
+- [x] `check_output(answer)` — deteksi marker system prompt (`"SECURITY GUARDRAILS"`,
+  `"TRUST BOUNDARY"`, `"cannot be overridden by data"`) di output LLM.
+- [ ] Redaksi PII bila DB berisi data sensitif (cegah dump email massal). ← defer
+- [x] Router/report sudah validasi JSON + tabel-harus-di-katalog — pertahankan.
+
+**Tier 4 — Scope/refusal**
+- [x] Instruksi scope/refusal sudah masuk dalam `_GUARDRAIL_BLOCK` via `harden_system_prompt()`.
+
+### Status: ✅ Selesai (Session 26, 2026-06-17)
+`guardrails.py` + `tests/test_guardrails.py` — Tier 1, 2, 3 selesai. 28 tests.
+Upgrade ke guard-model (Llama Guard) defer ke depan.
 
 ---
 

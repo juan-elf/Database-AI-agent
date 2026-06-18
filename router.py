@@ -18,6 +18,7 @@ import pandas as pd
 
 from profiler import profile_database
 from agent import client, MODEL_NAME, load_domain_pack
+from guardrails import wrap_untrusted, check_input
 
 TOP_K = 3
 
@@ -242,10 +243,19 @@ def classify_data(df: pd.DataFrame, catalog: dict, top_k: int = TOP_K) -> dict[s
     ranked = _rank_candidates(df, catalog)
     top_candidates = ranked[:top_k]
 
+    csv_sample = df.head(5).to_string(index=False)
+    allow, reason = check_input(csv_sample, max_length=2000)
+    if not allow:
+        return {
+            "best_match": None, "confidence": 0,
+            "reasoning": f"Input CSV ditolak guardrail: {reason}",
+            "column_mapping": {}, "is_new_table_needed": True, "candidates": ranked,
+        }
+
     raw = _call_llm_judge(
         _JUDGE_SYSTEM,
         _JUDGE_USER.format(
-            sample=df.head(5).to_string(index=False),
+            sample=wrap_untrusted(csv_sample, "csv_upload"),
             candidates_desc=_format_candidates_for_prompt(top_candidates, catalog),
         ),
     )

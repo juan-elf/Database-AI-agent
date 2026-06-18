@@ -17,6 +17,7 @@ from typing import Any, Callable
 from database import execute_query, get_db_label, get_db_engine, get_schema
 from profiler import profile_database, format_profile_for_prompt
 from agent import client, MODEL_NAME
+from guardrails import wrap_untrusted
 
 N_QUESTIONS = 6
 
@@ -219,7 +220,7 @@ def generate_report(
         if f.get("error"):
             findings_text += f"SQL gagal: {f['error']}\n"
         else:
-            findings_text += _summarize_rows(f["rows"]) + "\n"
+            findings_text += wrap_untrusted(_summarize_rows(f["rows"]), "query_result") + "\n"
         if f["is_anomaly"]:
             findings_text += "⚠️ Anomali terdeteksi.\n"
 

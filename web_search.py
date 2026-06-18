@@ -15,6 +15,8 @@ from typing import Any
 from tavily import TavilyClient
 from dotenv import load_dotenv
 
+from guardrails import wrap_untrusted
+
 load_dotenv()
 
 _client: TavilyClient | None = None
@@ -79,16 +81,17 @@ def search_web(query: str, max_results: int = 5) -> dict[str, Any]:
             {
                 "title": item.get("title", ""),
                 "url": item.get("url", ""),
-                "content": item.get("content", "")[:500],
+                "content": wrap_untrusted(item.get("content", "")[:500], "web_search_result"),
                 "score": round(item.get("score", 0), 3),
             }
             for item in response.get("results", [])
         ]
 
+        raw_answer = response.get("answer") or ""
         return {
             **base,
             "success": True,
-            "answer": response.get("answer"),
+            "answer": wrap_untrusted(raw_answer, "web_search_result") if raw_answer else None,
             "results": results,
         }
 

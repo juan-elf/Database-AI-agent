@@ -2,6 +2,110 @@
 
 ---
 
+## 2026-06-17 — Session 26: Arah D — AI Guardrails
+
+### Yang dikerjakan
+
+**`guardrails.py`** — modul keamanan baru (tidak ada dependensi eksternal, hanya `re`):
+- `harden_system_prompt(base)` — menambahkan blok `SECURITY GUARDRAILS / TRUST BOUNDARY` di akhir system prompt: instruksi eksplisit bahwa semua `<untrusted_data>` adalah DATA bukan instruksi; scope/refusal; larangan generate SQL write
+- `wrap_untrusted(data, source)` — membungkus konten eksternal dengan `<untrusted_data source="...">` sebelum masuk LLM context. Source: `database_sample_rows`, `web_search_result`, `csv_upload`, `query_result`
+- `check_input(text, max_length)` — pra-LLM: 20 pola injeksi/jailbreak (case-insensitive) + cap panjang. Returns `(allow, reason)`
+- `check_output(text)` — pasca-LLM: deteksi marker system prompt di output (potensi prompt leakage)
+
+**Integrasi ke 5 file existing:**
+| File | Perubahan |
+|------|-----------|
+| `agent.py` | `build_system_prompt()` → `harden_system_prompt(...)`; `Agent.chat()` → `check_input(user_message)` sebelum panggil API |
+| `database.py` | Sample rows di `_get_schema_sqlite()` + `_get_schema_postgres()` → `wrap_untrusted(..., "database_sample_rows")` |
+| `web_search.py` | `answer` + setiap `content` di results → `wrap_untrusted(..., "web_search_result")` |
+| `router.py` | `check_input(csv_sample, max_length=2000)` + `wrap_untrusted(..., "csv_upload")` sebelum LLM judge |
+| `insight_report.py` | `_summarize_rows(rows)` → `wrap_untrusted(..., "query_result")` sebelum synthesis |
+
+### Hasil
+- 276 tests passing (248 lama + 28 baru di `test_guardrails.py`)
+- Trust boundary eksplisit: model + semua data = untrusted; hanya kode Python = trusted; enforce di kode, bukan di prompt
+
+### Files yang dibuat/diubah
+
+| File | Perubahan |
+|------|-----------|
+| `guardrails.py` | File baru — 4 fungsi guardrail |
+| `tests/test_guardrails.py` | File baru — 28 tests (semua non-LLM) |
+| `agent.py` | Integrasikan harden + check_input |
+| `database.py` | Wrap sample rows |
+| `web_search.py` | Wrap web results |
+| `router.py` | check_input CSV + wrap sample |
+| `insight_report.py` | Wrap query results |
+| `plan.md` | Arah D semua tier ditandai `[x]` |
+
+---
+
+## 2026-06-17 — Session 25: B2 — Upload CSV → Confirmed Append
+
+### Yang dikerjakan
+
+**`writer.py`** — modul write terpisah dari path baca (`database.py`):
+- `is_write_configured()` — cek apakah write tersedia (Postgres: butuh `WRITE_DATABASE_URL`; SQLite: selalu bisa)
+- `get_write_connection()` — koneksi write terpisah: Postgres pakai `WRITE_DATABASE_URL` tanpa `readonly=True`; SQLite buka file tanpa mode=ro
+- `get_writable_table_columns(table)` — introspeksi schema via read connection (tidak butuh write untuk baca schema)
+- `validate_insert(df, table, column_mapping)` — validasi blocking: df kosong, mapping kosong, row guard (>500 baris blokir kecuali `override_row_limit=True`), kolom tujuan tidak ada di tabel. Warning non-blocking: kolom input tidak terpetakan
+- `preview_insert(df, table, column_mapping)` — return row count + preview 5 baris tanpa eksekusi
+- `execute_insert(df, table, column_mapping, session_id)` — INSERT berparameter dalam transaksi; rollback on error; log ke `logs/audit_YYYYMMDD.jsonl`
+- `_write_audit(entry)` — JSONL immutable: timestamp, event, session_id, table, columns, row_count, status, error (jika gagal)
+
+**`dashboard.py`** — write section di halaman Klasifikasi Data:
+- `_inject_secrets()` diperluas untuk `WRITE_DATABASE_URL`
+- Tombol Klasifikasi kini juga menyimpan `classify_input_df` ke session_state + hapus `insert_result` lama
+- Setelah hasil klasifikasi muncul: jika confidence ≥ 80% dan bukan `is_new_table_needed` → tampilkan write section
+  - Preview baris pertama (expander)
+  - Jika `WRITE_DATABASE_URL` belum di-set: info instruksi
+  - Jika sudah dikonfigurasi: tombol "✅ Konfirmasi & Simpan N baris ke `{table}`"
+  - Setelah insert: tampilkan sukses/error + path audit log
+
+### Supabase setup (user perlu jalankan)
+```sql
+GRANT INSERT ON battery_cycles TO agent_user;
+```
+Lalu set `WRITE_DATABASE_URL` di `.env` (nilai sama dengan `DATABASE_URL`).
+
+### Hasil
+- 248 tests passing (220 lama + 28 baru di `test_writer.py`)
+- Arsitektur write aman: LLM tidak pernah emit SQL write; app bangun INSERT berparameter; human konfirmasi sebelum eksekusi; audit trail JSONL setiap write
+
+### Files yang diubah/dibuat
+
+| File | Perubahan |
+|------|-----------|
+| `writer.py` | File baru — modul write aman |
+| `tests/test_writer.py` | File baru — 28 tests (semua mocked) |
+| `dashboard.py` | Write section di halaman Klasifikasi Data; `WRITE_DATABASE_URL` di `_inject_secrets` |
+| `plan.md` | B2 ditandai `[x]` |
+
+---
+
+## 2026-06-17 — Session 24: README Update (Sessions 21–23 sync)
+
+### Yang dikerjakan
+
+Update `README.md` untuk mencerminkan semua fitur baru dari Sessions 21–23:
+- **Features**: tambah "Autonomous Insight Report" dan "Data classification (read-only)"
+- **File overview**: tambah baris `insight_report.py` dan `router.py`
+- **Dashboard pages**: tabel diperluas jadi 7 halaman (Insight Report + Klasifikasi Data) + catatan dark mode toggle
+- **Tool Strategy**: catatan bahwa `insight_report.py` dan `router.py` adalah orchestration layer terpisah, bukan LLM tool
+- **Folder structure**: tambah `insight_report.py`, `router.py`, `.streamlit/config.toml`, `test_insight_report.py`, `test_router.py`
+
+### Hasil
+- README sudah sinkron dengan kode saat ini
+- 220 tests masih hijau
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `README.md` | Sync fitur, file overview, dashboard pages, folder structure, tool strategy |
+
+---
+
 ## 2026-06-16 — Session 23: Dashboard Redesign + Router B1 UI Integration
 
 ### Yang dikerjakan

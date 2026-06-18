@@ -20,6 +20,7 @@ from tools import TOOLS_SCHEMA, call_tool
 from logger import ConversationLogger
 from web_search import is_available as web_available
 from profiler import profile_database, format_profile_for_prompt
+from guardrails import harden_system_prompt, check_input
 import ui
 
 load_dotenv()
@@ -171,7 +172,7 @@ def build_system_prompt(domain_name: str | None = None) -> str:
                 f"Proceeding without domain knowledge."
             )
 
-    return "\n".join(parts)
+    return harden_system_prompt("\n".join(parts))
 
 
 def _call_api_with_retry(messages: list, tools: list) -> Any:
@@ -239,6 +240,13 @@ class Agent:
         self.messages.append({"role": "user", "content": user_message})
         if self.logger:
             self.logger.log_user_message(user_message)
+
+        allow, reason = check_input(user_message)
+        if not allow:
+            blocked_msg = f"Maaf, pesan tidak dapat diproses: {reason}"
+            if self.logger:
+                self.logger.log_error("input_blocked", reason)
+            return blocked_msg
 
         for iteration in range(MAX_ITERATIONS):
             if self.verbose:

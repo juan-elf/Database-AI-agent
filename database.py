@@ -15,6 +15,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from guardrails import wrap_untrusted
+
 try:
     import psycopg2
     import psycopg2.extras
@@ -187,12 +189,14 @@ def _get_schema_sqlite() -> str:
         sample_rows = cursor.fetchall()
         if sample_rows:
             lines.append("  Sample rows:")
+            row_strs = []
             for row in sample_rows:
                 row_dict = {
                     k: (str(v)[:60] + "..." if len(str(v)) > 60 else v)
                     for k, v in dict(row).items()
                 }
-                lines.append(f"    {row_dict}")
+                row_strs.append(f"    {row_dict}")
+            lines.append(wrap_untrusted("\n".join(row_strs), "database_sample_rows"))
 
     conn.close()
     return "\n".join(lines)
@@ -250,13 +254,15 @@ def _get_schema_postgres() -> str:
             col_names = [desc[0] for desc in cursor.description]
             if sample_rows:
                 lines.append("  Sample rows:")
+                row_strs = []
                 for row in sample_rows:
                     row_dict = dict(zip(col_names, row))
                     row_dict = {
                         k: (str(v)[:60] + "..." if len(str(v)) > 60 else v)
                         for k, v in row_dict.items()
                     }
-                    lines.append(f"    {row_dict}")
+                    row_strs.append(f"    {row_dict}")
+                lines.append(wrap_untrusted("\n".join(row_strs), "database_sample_rows"))
 
         return "\n".join(lines)
     finally:
