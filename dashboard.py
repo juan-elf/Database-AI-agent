@@ -31,7 +31,8 @@ def _inject_secrets() -> None:
     """
     try:
         secrets = st.secrets
-        for key in ("OPENROUTER_API_KEY", "TAVILY_API_KEY", "DATABASE_URL", "WRITE_DATABASE_URL"):
+        for key in ("OPENROUTER_API_KEY", "GUARDRAIL_API_KEY", "AGENT_MODEL", "GUARDRAIL_MODEL",
+                    "TAVILY_API_KEY", "DATABASE_URL", "WRITE_DATABASE_URL"):
             if not os.environ.get(key) and key in secrets:
                 os.environ[key] = secrets[key]
     except Exception:

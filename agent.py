@@ -20,21 +20,29 @@ from tools import TOOLS_SCHEMA, call_tool
 from logger import ConversationLogger
 from web_search import is_available as web_available
 from profiler import profile_database, format_profile_for_prompt
-from guardrails import harden_system_prompt, check_input
+from guardrails import harden_system_prompt, check_input_with_llm
 import ui
 
 load_dotenv()
 
-MODEL_NAME = "google/gemma-4-31b-it:free"
+MODEL_NAME = os.getenv("AGENT_MODEL", "google/gemma-4-31b-it:free")
+GUARDRAIL_MODEL = os.getenv("GUARDRAIL_MODEL", "openai/gpt-oss-120b:free")
 MAX_ITERATIONS = 10
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 2
 
 DOMAINS_DIR = Path("domains")
 
+_openrouter_base = "https://openrouter.ai/api/v1"
+
 client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1"
+    base_url=_openrouter_base,
+)
+
+guardrail_client = OpenAI(
+    api_key=os.getenv("GUARDRAIL_API_KEY", os.getenv("OPENROUTER_API_KEY")),
+    base_url=_openrouter_base,
 )
 
 
@@ -241,7 +249,7 @@ class Agent:
         if self.logger:
             self.logger.log_user_message(user_message)
 
-        allow, reason = check_input(user_message)
+        allow, reason = check_input_with_llm(user_message, guardrail_client, GUARDRAIL_MODEL)
         if not allow:
             blocked_msg = f"Maaf, pesan tidak dapat diproses: {reason}"
             if self.logger:
