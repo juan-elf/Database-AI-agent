@@ -260,9 +260,16 @@ CSV→router paling kritis: upload sepenuhnya untrusted, langsung masuk judge pe
 
 **🥈 Tier 2 — Input guardrail (pra-LLM)**
 - [x] `guardrails.py`: `check_input(text, max_length) -> (allow, reason)` — 20 pola injeksi
-  (case-insensitive) + cap panjang 5.000 karakter. Dipanggil di `Agent.chat()` (pesan user)
-  dan `router.classify_data()` (CSV, cap 2.000 karakter).
+  (case-insensitive) + cap panjang 5.000 karakter. Dipanggil di `router.classify_data()` (CSV,
+  cap 2.000 karakter) dan sebagai Stage 1 di dalam `check_input_with_llm`.
 - [x] Cap panjang input: 5.000 karakter untuk pesan user, 2.000 untuk CSV ke router judge.
+- [x] `check_input_with_llm(text, client, model)` — LLM classifier dua-tahap: Stage 1 heuristik
+  (gratis), Stage 2 LLM scope classifier (`max_tokens=5`, balas `ALLOW/BLOCK`). Menangkap compound
+  injection ("pertanyaan data + tutorial Python") yang regex tidak bisa deteksi. Fail-open saat API
+  error. Pakai `guardrail_client` terpisah (model bisa berbeda dari agent utama via `GUARDRAIL_MODEL`).
+- [x] `_SCOPE_CHECK_SYSTEM` di-tune: prinsip "BLOCK hanya yang jelas salah, sisanya ALLOW" —
+  greeting, capability questions, schema questions lolos; compound off-topic dan jailbreak tetap
+  di-BLOCK.
 
 **🥉 Tier 3 — Output guardrail (pasca-LLM)**
 - [x] `check_output(answer)` — deteksi marker system prompt (`"SECURITY GUARDRAILS"`,
@@ -273,15 +280,14 @@ CSV→router paling kritis: upload sepenuhnya untrusted, langsung masuk judge pe
 **Tier 4 — Scope/refusal**
 - [x] Instruksi scope/refusal sudah masuk dalam `_GUARDRAIL_BLOCK` via `harden_system_prompt()`.
 
-### Status: ✅ Selesai (Session 26, 2026-06-17)
-`guardrails.py` + `tests/test_guardrails.py` — Tier 1, 2, 3 selesai. 28 tests.
+### Status: ✅ Selesai (Session 26–27, 2026-06-17–18)
+`guardrails.py` + `tests/test_guardrails.py` — Tier 1, 2, 3 selesai. 36 tests.
+Dual-LLM: `AGENT_MODEL` + `GUARDRAIL_MODEL` terpisah. Scope classifier di-tune.
 Upgrade ke guard-model (Llama Guard) defer ke depan.
 
 ---
 
 ## Urutan eksekusi yang disarankan
-
-> Semua item prioritas tinggi sudah selesai per 2026-06-12. Yang tersisa adalah tier 2 opsional.
 
 | # | Item | Status |
 |---|------|--------|
@@ -292,4 +298,11 @@ Upgrade ke guard-model (Llama Guard) defer ke depan.
 | 5 | Eval diperluas + akurasi di README (85.7% Gemma) | ✅ |
 | 6 | Known Limitations + arsitektur write di README | ✅ |
 | 7 | Supabase Fase 2 (dual-engine + read-only role) | ✅ |
-| 8 | Caching query/schema, history management, cost tracking | ⏳ opsional |
+| 8 | Autonomous Insight Report (Arah C) | ✅ |
+| 9 | Catalog + Router Classifier / CSV classify UI (Arah B1) | ✅ |
+| 10 | Upload CSV → Confirmed Append (Arah B2) | ✅ |
+| 11 | AI Guardrails — Tier 1/2/3 + LLM classifier (Arah D) | ✅ |
+| 12 | Dual-LLM architecture (`AGENT_MODEL` + `GUARDRAIL_MODEL`) | ✅ |
+| 13 | Caching query/schema, history management, cost tracking | ⏳ opsional |
+| 14 | Conversational insert via chat (Arah B3) | ⏳ opsional |
+| 15 | New table creation / schema evolution (Arah B4) | ⏳ defer — tertinggi risiko |

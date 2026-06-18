@@ -20,16 +20,21 @@ Kalau mau upgrade agent ke Claude atau GPT-4, cukup set `AGENT_MODEL=anthropic/c
 
 Sebelumnya conftest meng-autouse bypass `guardrails.check_input_with_llm`, tapi `agent.py` import fungsi itu dengan `from guardrails import check_input_with_llm` — jadi referensi di namespace `agent` berbeda dari referensi di `guardrails`. 5 test agent tetap failing karena LLM classifier dipanggil nyata. Fix: target patch ke `agent.check_input_with_llm`.
 
+**Guardrail scope fix** — `_SCOPE_CHECK_SYSTEM` terlalu ketat di evaluasi awal:
+
+Greeting ("halo"), capability question ("apa yang kamu bisa?"), dan schema question ("jelaskan database yang kamu miliki") semua di-BLOCK karena prompt asli hanya ALLOW "pertanyaan murni database". Fix: ubah prinsip ke "BLOCK hanya yang jelas-jelas salah, sisanya ALLOW". Ditambahkan daftar eksplisit ALLOW (greeting, capability, schema, ambiguous) dan "When in doubt: ALLOW."
+
 ### Hasil
 - 284 tests passing
 - Arsitektur siap upgrade: `AGENT_MODEL` = premium, `GUARDRAIL_MODEL` = tetap gratis
+- Classifier sekarang akurat: compound injection di-BLOCK, legitimate queries lolos
 
 ### Files yang diubah
 
 | File | Perubahan |
 |------|-----------|
 | `agent.py` | Pisah `client` + `guardrail_client`; `MODEL_NAME` → `AGENT_MODEL`; `GUARDRAIL_MODEL` env var |
-| `tests/conftest.py` | Patch `agent.check_input_with_llm` (bukan `guardrails.*`) + skip `test_guardrails.py` |
+| `tests/conftest.py` | Patch `agent.check_input_with_llm` (bukan `guardrails.*`); `test_guardrails.py` dikecualikan dari bypass sehingga test guardrail tetap berjalan dengan mock client aslinya |
 | `.env.example` | Tambah `AGENT_MODEL`, `GUARDRAIL_MODEL`, `GUARDRAIL_API_KEY`; update dari MiniMax ke OpenRouter |
 | `dashboard.py` | `_inject_secrets()` diperluas: `GUARDRAIL_API_KEY`, `AGENT_MODEL`, `GUARDRAIL_MODEL` |
 | `README.md` | Guardrails table: tambah Tier 2 LLM classifier; Configuration: `MODEL_NAME` → tabel baru dengan 3 env var |

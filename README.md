@@ -108,9 +108,9 @@ pip install -r requirements.txt
 OPENROUTER_API_KEY=sk-or-your-key-here
 TAVILY_API_KEY=tvly-xxxxx        # optional — enables web search
 
-# Model selection (optional — both default to gemma free)
-AGENT_MODEL=google/gemma-4-31b-it:free      # main agent — upgrade to a premium model here
-GUARDRAIL_MODEL=google/gemma-4-31b-it:free  # classifier (only needs to reply ALLOW/BLOCK)
+# Model selection (optional)
+AGENT_MODEL=google/gemma-4-31b-it:free       # main agent — upgrade to a premium model here
+GUARDRAIL_MODEL=openai/gpt-oss-120b:free     # classifier (only needs to reply ALLOW/BLOCK)
 GUARDRAIL_API_KEY=sk-or-separate-key        # optional — only if guardrail uses a different provider
 
 # Optional — if set, agent connects to Postgres instead of SQLite
@@ -368,7 +368,7 @@ Key constants in `agent.py`:
 | Constant / Env var | Default | Description |
 |---|---|---|
 | `AGENT_MODEL` | `google/gemma-4-31b-it:free` | Main agent model — override to upgrade (e.g. `anthropic/claude-sonnet-4-5`) |
-| `GUARDRAIL_MODEL` | `google/gemma-4-31b-it:free` | Classifier model — only replies ALLOW/BLOCK, keep fast/cheap |
+| `GUARDRAIL_MODEL` | `openai/gpt-oss-120b:free` | Classifier model — only replies ALLOW/BLOCK, keep fast/cheap |
 | `GUARDRAIL_API_KEY` | _(falls back to `OPENROUTER_API_KEY`)_ | Optional separate API key if guardrail uses a different provider |
 | `MAX_ITERATIONS` | `10` | Max agent loop iterations per question |
 | `MAX_RETRIES` | `3` | API retries on transient errors |

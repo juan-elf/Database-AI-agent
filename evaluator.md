@@ -172,3 +172,61 @@ lengkap → **Arah D** di `plan.md`. Prinsip: model + data = untrusted, enforce 
 | 2 | Guardrails Tier 1 (Arah D) | Menutup ancaman injeksi #1, ROI tertinggi |
 | 3 | Self-correction di Insight Report (#3) | Robustness |
 | 4 | Dedup append + Known Limitations (#2) | Polish |
+
+---
+---
+
+# Evaluasi #3 — 2026-06-18 (Review dokumentasi: devlog + plan.md, Arah D Guardrails)
+
+Evaluasi **akurasi update devlog & plan.md** pasca Session 26 (AI Guardrails) + Session 27
+(Dual-LLM architecture). Setiap klaim di-cross-check langsung ke kode.
+
+## Verdict
+
+**Update akurat, kualitas dokumentasi tinggi.** Pekerjaan nyata terverifikasi penuh; devlog jujur
+(tandai item defer) dan menjelaskan "why" (alasan dual-LLM, fail-open, scope tuning) — materi
+portfolio kuat. Yang tersisa hanya drift kecil doc-vs-kode.
+
+### Terverifikasi akurat ✅
+
+- **284 tests passing** (sesuai devlog Session 27)
+- `guardrails.py`: `harden_system_prompt`, `wrap_untrusted`, `check_input`, `check_input_with_llm`,
+  `check_output` — semua ada
+- **Dual-LLM**: `client` + `guardrail_client` (`agent.py:38,43`); env `AGENT_MODEL` /
+  `GUARDRAIL_MODEL` / `GUARDRAIL_API_KEY`
+- **Integrasi `wrap_untrusted` di 5 file**: database (×2), web_search (answer+content), router,
+  insight_report — semua terpasang
+- `agent.chat` panggil `check_input_with_llm` (`agent.py:252`)
+- Tier 3 PII di-defer — jujur ditandai `[ ]`
+
+## Drift doc-vs-kode (urut dampak)
+
+### 🟡 1. Tabel "Urutan eksekusi" di ujung plan.md basi
+`plan.md:292` masih bilang "semua prioritas tinggi selesai per 2026-06-12, sisanya tier 2 opsional"
+dan tabelnya (item 1–8) **hanya Arah A**. B1, B2, C, D selesai setelah itu → ringkasan eksekutif
+paling bawah **menjual murah** kerja besar. Tambahkan B/C/D ke tabel.
+
+### 🟡 2. plan.md Tier 2 keliru sebut fungsi
+`plan.md:263-264` bilang `check_input` (heuristik) "dipanggil di `Agent.chat()`". Faktanya
+`agent.chat` panggil `check_input_with_llm` (heuristik hanya Stage 1 di dalamnya). Hanya
+`router.py:247` yang panggil `check_input` langsung. Fungsi benar, penamaan menyesatkan.
+
+### 🟡 3. `.env.example` salah sebut default
+Komentar di bawah `GUARDRAIL_MODEL` bilang "Default: google/gemma-4-31b-it:free", padahal default
+kode `openai/gpt-oss-120b:free` (`agent.py:29`) — dan nilai contohnya pun gpt-oss-120b. Kontradiktif.
+
+### 🟢 4. Devlog: kata "skip test_guardrails.py" kurang tepat
+`devlog.md:37` — conftest tidak men-*skip*; ia mengecualikan file itu dari bypass
+`check_input_with_llm` (test guardrail tetap jalan, ikut terhitung di 284). "Skip" bisa menyesatkan.
+
+## Belum diverifikasi
+- **README** — devlog klaim sudah update untuk guardrails + tabel config. README = etalase, rawan
+  drift; layak dicek terpisah.
+
+## Urutan rapikan
+| # | Item | Catatan |
+|---|------|---------|
+| 1 | Update tabel "Urutan eksekusi" plan.md (B/C/D) | Hindari menjual murah; reviewer baca bagian akhir |
+| 2 | Fix `.env.example` komentar default GUARDRAIL_MODEL | Kontradiksi langsung kelihatan |
+| 3 | Koreksi wording Tier 2 plan.md + "skip" devlog | Presisi |
+| 4 | Cek drift README | Etalase |
