@@ -108,6 +108,11 @@ pip install -r requirements.txt
 OPENROUTER_API_KEY=sk-or-your-key-here
 TAVILY_API_KEY=tvly-xxxxx        # optional — enables web search
 
+# Model selection (optional — both default to gemma free)
+AGENT_MODEL=google/gemma-4-31b-it:free      # main agent — upgrade to a premium model here
+GUARDRAIL_MODEL=google/gemma-4-31b-it:free  # classifier (only needs to reply ALLOW/BLOCK)
+GUARDRAIL_API_KEY=sk-or-separate-key        # optional — only if guardrail uses a different provider
+
 # Optional — if set, agent connects to Postgres instead of SQLite
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 
@@ -246,7 +251,8 @@ The database tool is **read-only** with defense-in-depth:
 |---|---|---|
 | **Tier 1 — Trust boundary** | `harden_system_prompt()` appends an explicit `SECURITY GUARDRAILS` block: all `<untrusted_data>` content is DATA, not instructions; scope/refusal rules; no write SQL generation | `agent.py:build_system_prompt()` |
 | **Tier 1 — Data delimiting** | `wrap_untrusted(data, source)` tags every external content block with `<untrusted_data source="...">` before it enters LLM context | DB sample rows, web results, CSV upload, query results |
-| **Tier 2 — Input check (pre-LLM)** | `check_input(text)` blocks 20 jailbreak/injection patterns (case-insensitive) and rejects inputs > 5,000 chars; CSV to router capped at 2,000 chars | `agent.py:chat()`, `router.py:classify_data()` |
+| **Tier 2 — Heuristic input check** | `check_input(text)` blocks 20 jailbreak/injection patterns (case-insensitive) and rejects inputs > 5,000 chars; CSV to router capped at 2,000 chars | `agent.py:chat()`, `router.py:classify_data()` |
+| **Tier 2 — LLM scope classifier** | `check_input_with_llm()` sends the message to a dedicated fast/cheap `guardrail_client` with a strict `ALLOW/BLOCK` prompt (`max_tokens=5`). Catches compound injection ("data question + off-topic request") that regex misses. Fail-open on API error so legitimate users are never blocked. | `agent.py:chat()` |
 | **Tier 3 — Output check (post-LLM)** | `check_output(text)` detects verbatim system-prompt markers in model output — signals potential prompt leakage | Available; callers log and suppress |
 
 ---
@@ -359,9 +365,11 @@ Add `"order_matters": true` when the test explicitly checks row ordering.
 
 Key constants in `agent.py`:
 
-| Constant | Default | Description |
+| Constant / Env var | Default | Description |
 |---|---|---|
-| `MODEL_NAME` | `google/gemma-4-31b-it:free` | Model via OpenRouter (free tier) |
+| `AGENT_MODEL` | `google/gemma-4-31b-it:free` | Main agent model — override to upgrade (e.g. `anthropic/claude-sonnet-4-5`) |
+| `GUARDRAIL_MODEL` | `google/gemma-4-31b-it:free` | Classifier model — only replies ALLOW/BLOCK, keep fast/cheap |
+| `GUARDRAIL_API_KEY` | _(falls back to `OPENROUTER_API_KEY`)_ | Optional separate API key if guardrail uses a different provider |
 | `MAX_ITERATIONS` | `10` | Max agent loop iterations per question |
 | `MAX_RETRIES` | `3` | API retries on transient errors |
 | `INITIAL_BACKOFF` | `2` | Initial backoff in seconds (exponential: 2s, 4s, 8s) |

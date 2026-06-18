@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-06-18 — Session 27: Dual-LLM Architecture + Guardrail Fix
+
+### Yang dikerjakan
+
+**Dual-LLM architecture** — pisah client agent utama dari guardrail classifier:
+
+Sebelumnya satu `client` dipakai untuk semua: agent loop dan `check_input_with_llm`. Ini berarti upgrade model agent (ke premium) otomatis ikut menaikkan biaya classifier yang hanya perlu balas `ALLOW` atau `BLOCK`.
+
+Fix: dua client terpisah di `agent.py`:
+- `client` — main agent; model diambil dari `AGENT_MODEL` env var (default: `google/gemma-4-31b-it:free`)
+- `guardrail_client` — classifier saja; model dari `GUARDRAIL_MODEL` env var; API key dari `GUARDRAIL_API_KEY` (fallback ke `OPENROUTER_API_KEY`)
+
+Kalau mau upgrade agent ke Claude atau GPT-4, cukup set `AGENT_MODEL=anthropic/claude-sonnet-4-5` di `.env` — guardrail tetap pakai model murah/cepat.
+
+**Fix `tests/conftest.py`** — patch `agent.check_input_with_llm` bukan `guardrails.check_input_with_llm`:
+
+Sebelumnya conftest meng-autouse bypass `guardrails.check_input_with_llm`, tapi `agent.py` import fungsi itu dengan `from guardrails import check_input_with_llm` — jadi referensi di namespace `agent` berbeda dari referensi di `guardrails`. 5 test agent tetap failing karena LLM classifier dipanggil nyata. Fix: target patch ke `agent.check_input_with_llm`.
+
+### Hasil
+- 284 tests passing
+- Arsitektur siap upgrade: `AGENT_MODEL` = premium, `GUARDRAIL_MODEL` = tetap gratis
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `agent.py` | Pisah `client` + `guardrail_client`; `MODEL_NAME` → `AGENT_MODEL`; `GUARDRAIL_MODEL` env var |
+| `tests/conftest.py` | Patch `agent.check_input_with_llm` (bukan `guardrails.*`) + skip `test_guardrails.py` |
+| `.env.example` | Tambah `AGENT_MODEL`, `GUARDRAIL_MODEL`, `GUARDRAIL_API_KEY`; update dari MiniMax ke OpenRouter |
+| `dashboard.py` | `_inject_secrets()` diperluas: `GUARDRAIL_API_KEY`, `AGENT_MODEL`, `GUARDRAIL_MODEL` |
+| `README.md` | Guardrails table: tambah Tier 2 LLM classifier; Configuration: `MODEL_NAME` → tabel baru dengan 3 env var |
+
+---
+
 ## 2026-06-17 — Session 26: Arah D — AI Guardrails
 
 ### Yang dikerjakan
