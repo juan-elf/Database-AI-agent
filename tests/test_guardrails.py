@@ -38,6 +38,14 @@ class TestHardenSystemPrompt:
         result = harden_system_prompt("base prompt")
         assert "TRUST BOUNDARY" in result
 
+    def test_compound_message_rule_present(self):
+        result = harden_system_prompt("base prompt")
+        assert "mixes a database question" in result or "compound" in result.lower() or "off-topic" in result
+
+    def test_standalone_code_rule_present(self):
+        result = harden_system_prompt("base prompt")
+        assert "standalone code" in result
+
     def test_guardrail_appended_after_base(self):
         base = "ORIGINAL"
         result = harden_system_prompt(base)
