@@ -21,5 +21,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install kaleido (optional — PNG chart export)
+        run: pip install "kaleido>=0.2.1" || echo "kaleido install failed — chart PNG export disabled, tests unaffected"
+
       - name: Run tests
         run: pytest tests/ -v

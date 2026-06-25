@@ -9,7 +9,10 @@ scipy>=1.11.0
 plotly>=5.20.0
 psycopg2-binary>=2.9.0
 python-telegram-bot>=20.0
-kaleido>=0.2.1
+
+# optional — only needed for Telegram bot PNG chart export (/report command)
+# install separately: pip install kaleido>=0.2.1
+# kaleido requires system libs on Linux; gracefully skipped if not installed
 
 # dev / testing
 pytest>=8.0.0
