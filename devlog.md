@@ -1,4 +1,141 @@
-# Devlog — Universal SQL Agent
+# Devlog — DataGen
+
+---
+
+## 2026-06-23 — Session 31: Arah E4 — Insight Report + Chart via Telegram
+
+### Yang dikerjakan
+
+**`/report` command** di `telegram_bot.py` — E4 selesai:
+
+1. User ketik `/report`
+2. Bot kirim pesan status "⏳ Generating..." lalu jalankan `generate_report()` via `asyncio.to_thread()`
+3. Setelah selesai: hapus pesan status, kirim narrative sebagai file `insight_report_YYYY-MM-DD_HH-MM.md` via `send_document()`
+4. Per finding dengan data: coba generate chart PNG via `_rows_to_png()`, kirim via `send_photo()` — caption berisi pertanyaan + badge ⚠️ jika anomali
+5. Jika chart tidak bisa di-generate (data tidak chartable atau kaleido tidak tersedia): skip gracefully tanpa error
+
+**`_rows_to_png(rows)`** — helper chart PNG baru:
+- Detect `time_cols` (kolom numerik dengan kata kunci cycle/date/time/dll) → line chart dengan color per kategori
+- `cat_cols + num_cols` → bar chart
+- 2+ numerik → scatter chart
+- Pakai `plotly.express`, export via `fig.to_image(format="png", width=800, height=400)`
+- Semua exception di-catch → return `None` (graceful skip)
+
+**`requirements.txt`** — tambah `kaleido>=0.2.1` (dependency plotly untuk `to_image()`)
+
+**`cmd_help()`** — tambah `/report` di daftar perintah
+
+### Error handling
+- `generate_report()` gagal (exception) → edit status_msg jadi pesan error
+- Report ada errors list → tampilkan error pertama
+- Chart gagal (kaleido tidak install, data tidak chartable, dll) → skip tanpa crash
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `telegram_bot.py` | Import `generate_report`; tambah `_TIME_KW`, `_rows_to_png()`, `cmd_report()`; register `CommandHandler("report", ...)`; update `cmd_help()` |
+| `requirements.txt` | Tambah `kaleido>=0.2.1` |
+| `plan.md` | E4 ditandai `[x]`; tabel eksekusi item 19 → ✅ |
+
+### Hasil
+- 284 tests tetap passing (telegram_bot.py adalah adapter, tidak ada core yang disentuh)
+- E4 selesai — Roadmap Arah E lengkap (E1–E4 semua ✅)
+
+---
+
+## 2026-06-20 — Session 30: Arah E3 — CSV Upload via Telegram
+
+### Yang dikerjakan
+
+**CSV ingestion dengan inline keyboard confirmation** di `telegram_bot.py`:
+
+**`handle_document()`** — handler untuk file `.csv` yang dikirim user:
+1. Rate limit check (sama seperti pesan teks)
+2. Validasi ekstensi `.csv`, parse dengan `pd.read_csv()` via `io.BytesIO`
+3. Guard: kosong → tolak; > 500 baris → tolak dengan saran pakai dashboard
+4. `build_catalog()` + `classify_data()` — keduanya dijalankan via `asyncio.to_thread()` (sync → async)
+5. Tampilkan hasil: tabel cocok, confidence badge (🟢/🟡/🔴), column mapping `<pre>`, preview 5 baris
+6. Jika confidence ≥ 80% dan `is_write_configured()`:
+   - Simpan ke `_pending_insert[chat_id]`
+   - Kirim inline keyboard `[✅ Simpan N baris ke {table}]  [❌ Batal]`
+7. Jika write belum dikonfigurasi: tampilkan klasifikasi + info `💡 Set WRITE_DATABASE_URL`
+8. Jika confidence < 80% atau perlu tabel baru: tampilkan hasil saja, tanpa tombol
+
+**`handle_callback()`** — handler inline keyboard:
+- `_CB_CANCEL` → hapus `_pending_insert[chat_id]`, edit pesan jadi "❌ Dibatalkan"
+- `_CB_CONFIRM` → ambil pending state, edit pesan jadi "⏳ Menyimpan...", panggil `execute_insert()` via thread, tampilkan rows inserted + path audit log
+- Guard: state tidak ada (expired/double-tap) → pesan "Sesi kadaluarsa, upload ulang"
+
+**State management**: `_pending_insert: dict[int, dict]` — state per `chat_id` dihapus saat konfirmasi, batal, `/start`, atau `/reset`.
+
+**Human-in-the-loop terjaga**: tidak ada write tanpa tap ✅ eksplisit — sama dengan dashboard.
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `telegram_bot.py` | Tambah `handle_document`, `handle_callback`, `_pending_insert`, `_CB_CONFIRM/CANCEL`; import `InlineKeyboardButton/Markup`, `CallbackQueryHandler`, `io`, `pd`, `router`, `writer`; update `cmd_start/reset` bersihkan pending state; update `cmd_help` sebut CSV |
+
+---
+
+## 2026-06-20 — Session 29: Arah E2 — Rate Limiting
+
+### Yang dikerjakan
+
+**Rate limiter per user** di `telegram_bot.py`:
+- `_rate_timestamps: dict[int, list[float]]` — menyimpan timestamp tiap pesan per `chat_id`
+- `_is_rate_limited(chat_id)` — filter timestamps di luar window 60 detik, blok kalau sudah ≥ limit
+- Default: 10 pesan/menit, bisa di-override via `TELEGRAM_RATE_LIMIT` env var
+- Rate check dilakukan **sebelum** `send_chat_action` dan `Agent.chat()` — API call tidak terjadi sama sekali kalau kena limit
+- Allowlist `chat_id` di-skip (bot tetap terbuka untuk semua user)
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `telegram_bot.py` | Tambah `import time`; `_rate_timestamps`, `_RATE_LIMIT`, `_RATE_WINDOW`, `_is_rate_limited()`; rate check di `handle_message` |
+| `.env.example` | Tambah `TELEGRAM_RATE_LIMIT` (dikomentari, default 10) |
+
+---
+
+## 2026-06-20 — Session 28: Arah E1 — Telegram Bot (Read-Only)
+
+### Yang dikerjakan
+
+**`telegram_bot.py`** — adapter Telegram tipis di atas `Agent.chat()`:
+- `/start` — mulai sesi baru (reset history user tersebut)
+- `/reset` — hapus history, lanjut sesi
+- `/help` — daftar perintah + contoh pertanyaan
+- Pesan biasa → `asyncio.to_thread(agent.chat, text)` → balas (non-blocking, Agent sync dijalankan di thread pool)
+- `_sessions: dict[int, Agent]` — tiap `chat_id` dapat Agent sendiri, history tidak bercampur
+- `_split()` — auto-split respons > 4.096 karakter jadi beberapa pesan
+- `send_chat_action(TYPING)` — indikator mengetik saat Agent memproses
+- Long-polling (`app.run_polling`) — tidak butuh webhook atau domain publik, langsung jalan di VPS
+
+**Guardrails otomatis ikut** — bot pakai `Agent.chat()` langsung, jadi `check_input_with_llm`, `wrap_untrusted`, dan semua layer guardrail aktif tanpa kode tambahan.
+
+**Format respons: plain text** — aman dari parse error MarkdownV2 Telegram. Upgrade ke markdown Telegram di-defer setelah bot stabil.
+
+### Yang tidak masuk E1 (defer ke E2–E4)
+- Rate-limit per user (E2)
+- Allowlist `chat_id` untuk write (E2)
+- CSV upload via Telegram Document (E3)
+- Chart sebagai PNG / Insight Report sebagai file (E4)
+
+### Hasil
+- 284 tests tetap passing — `telegram_bot.py` adalah adapter murni, tidak menyentuh core
+- Bot siap ditest lokal sebelum deploy ke VPS Tencent
+
+### Files yang dibuat/diubah
+
+| File | Perubahan |
+|------|-----------|
+| `telegram_bot.py` | File baru — Telegram adapter ~100 baris |
+| `requirements.txt` | Tambah `python-telegram-bot>=20.0` |
+| `.env.example` | Tambah `TELEGRAM_BOT_TOKEN` |
+| `README.md` | Fitur Telegram di Features; section "Telegram Bot" baru; folder structure |
+| `plan.md` | Tabel eksekusi E1 updated |
 
 ---
 

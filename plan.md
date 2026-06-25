@@ -1,4 +1,4 @@
-# Plan — Universal SQL Agent
+# Plan — DataGen
 
 Roadmap pengembangan project menuju portfolio kuat (target: role **Data / ML / AI Engineer**)
 dan jalur menuju production. Disusun 2026-06-09.
@@ -287,6 +287,59 @@ Upgrade ke guard-model (Llama Guard) defer ke depan.
 
 ---
 
+## FITUR — Arah E: Multi-channel (Telegram Bot) (ditambahkan 2026-06-19)
+
+> User pilih **Telegram dulu** (sudah familiar BotFather). WhatsApp di-defer — terlalu berat
+> (verifikasi Meta Business, webhook publik, berbayar, library tak resmi langgar ToS).
+
+### Kenapa mudah untuk project ini
+
+`Agent.chat(user_message) -> str` **sudah terpisah penuh dari UI** (dipakai CLI + Streamlit). Bot
+= adapter baru di atas inti yang sama, bukan tulis ulang. Memvalidasi agent benar-benar multi-channel.
+
+### Yang dibutuhkan
+
+1. **Bot token** dari BotFather.
+2. **Library** `python-telegram-bot` (async).
+3. **Adapter tipis** (`telegram_bot.py`): terima pesan → `Agent.chat()` → balas. ~100 baris.
+4. **Hosting always-on** — ⚠️ bot = proses long-running, **Streamlit Cloud TIDAK bisa**. Pakai
+   Railway / Render / Fly.io sebagai worker terpisah. Hasilnya 2 deployment: dashboard + bot.
+   (Telegram long-polling → tak butuh webhook publik/HTTPS, lebih mudah.)
+5. **Session per user** — map `chat_id → Agent` (atau persist history).
+6. Env keys sama (`OPENROUTER_API_KEY`, dll).
+
+### Adaptasi spesifik (tidak semua fitur pindah 1:1)
+
+- **🔴 Gate konfirmasi write** — dashboard pakai tombol; di chat **harus** jadi **inline keyboard**
+  (✅/❌) atau "balas YA". Jangan sampai pindah ke chat menghilangkan human-in-the-loop.
+- **Upload CSV** — Telegram `Document` handler → router classify → konfirmasi → write. Bisa jalan.
+- **Chart & Insight Report** — kirim chart sebagai **PNG** (export), report sebagai file `.md`/PDF.
+  Tabel tidak render bagus di chat → gambar atau monospace.
+- **Rate-limit + access control** — bot publik = siapa pun bisa kirim. Guardrail input
+  (`check_input_with_llm`) sudah ada; tambah **per-user rate limit**. Fitur write **wajib allowlist
+  `chat_id`** (sama isu dengan eksposur write demo publik).
+- **State multi-user** — `database.py` pakai global `_db_path`; aman untuk single-DB bot, perlu
+  refaktor jika multi-DB per user.
+
+### Pentahapan
+
+| Fase | Isi | Effort |
+|------|-----|--------|
+| **E1** | Bot Q&A **read-only** (tanya → SQL → jawab), reuse `Agent.chat()` | ~1 akhir pekan |
+| **E2** | Rate-limit + allowlist `chat_id` (access control) | Kecil |
+| **E3** | Upload CSV → classify → konfirmasi (inline keyboard) → write | Sedang |
+| **E4** | Insight Report + chart sebagai file/gambar | Sedang |
+
+- [x] **E1 — Bot read-only.** `telegram_bot.py` selesai — pending test lokal + deploy VPS.
+- [x] **E2 — Rate limiting** — 10 pesan/menit per user (configurable via `TELEGRAM_RATE_LIMIT`). Allowlist chat_id di-skip (bot terbuka untuk semua).
+- [x] **E3 — CSV ingestion via bot** — upload `.csv` → classify → inline keyboard ✅/❌ → write + audit.
+- [x] **E4 — Report + chart** sebagai dokumen/PNG.
+
+> Rekomendasi: mulai **E1 (read-only)** dulu — reuse `Agent.chat()` langsung, nol risiko write.
+> Write di bot (E3) hanya setelah access-control (E2) beres.
+
+---
+
 ## Urutan eksekusi yang disarankan
 
 | # | Item | Status |
@@ -306,3 +359,7 @@ Upgrade ke guard-model (Llama Guard) defer ke depan.
 | 13 | Caching query/schema, history management, cost tracking | ⏳ opsional |
 | 14 | Conversational insert via chat (Arah B3) | ⏳ opsional |
 | 15 | New table creation / schema evolution (Arah B4) | ⏳ defer — tertinggi risiko |
+| 16 | Telegram bot read-only (Arah E1) | ✅ implemented — pending test + deploy |
+| 17 | Rate limiting (Arah E2) | ✅ |
+| 18 | CSV ingestion via bot + inline keyboard (Arah E3) | ✅ |
+| 19 | Report + chart sebagai file/PNG (Arah E4) | ✅ |

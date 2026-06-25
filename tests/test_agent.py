@@ -112,7 +112,7 @@ class TestBuildSystemPrompt:
     def test_contains_generic_instructions(self, db_env):
         import agent
         prompt = agent.build_system_prompt()
-        assert "Universal SQL Assistant" in prompt
+        assert "DataGen" in prompt
 
     def test_contains_schema(self, db_env):
         import agent
@@ -165,7 +165,7 @@ class TestAgentInit:
     def test_system_prompt_contains_generic_instructions(self, db_env):
         import agent
         a = agent.Agent(verbose=False, enable_logging=False)
-        assert "Universal SQL Assistant" in a.system_prompt
+        assert "DataGen" in a.system_prompt
 
 
 # ── Agent.chat ────────────────────────────────────────────────────────────────

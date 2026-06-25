@@ -1,5 +1,5 @@
 """
-Tool definitions for Universal SQL Agent.
+Tool definitions for DataGen.
 
 3 tools:
 - execute_sql: query the database (primary)

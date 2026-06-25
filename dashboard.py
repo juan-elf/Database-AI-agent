@@ -1,5 +1,5 @@
 """
-dashboard.py — Universal SQL Agent Dashboard (Redesigned)
+dashboard.py — DataGen Dashboard (Redesigned)
 """
 import io
 import json
@@ -504,7 +504,7 @@ sessions = load_sessions()
 # DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
 if page == "dashboard":
-    page_header("Dashboard", "Overview Universal SQL Agent")
+    page_header("Dashboard", "Overview DataGen")
 
     # Aggregates
     total_q  = sum(s["questions"]   for s in sessions)

@@ -1,5 +1,5 @@
 """
-Eval harness — Universal SQL Agent accuracy evaluation.
+Eval harness — DataGen accuracy evaluation.
 
 Runs a set of natural-language test cases against a live agent, captures the
 SQL results the agent produces, and compares them to ground-truth results from
@@ -335,7 +335,7 @@ def print_summary(results: list[dict]):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="run_eval",
-        description="Evaluate Universal SQL Agent accuracy against a test case set.",
+        description="Evaluate DataGen accuracy against a test case set.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

@@ -1,4 +1,4 @@
-# Evaluator — Universal SQL Agent
+# Evaluator — DataGen
 
 Hasil evaluasi project pasca-pengembangan besar (Session 10–15 + migrasi OpenRouter & Supabase).
 Dievaluasi 2026-06-12. Semua temuan diverifikasi langsung terhadap kode & test suite, bukan hanya

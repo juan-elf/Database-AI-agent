@@ -26,7 +26,7 @@ console = Console()
 
 
 def print_welcome():
-    title = Text("🤖 UNIVERSAL SQL AGENT", style="bold cyan", justify="center")
+    title = Text("🤖 DATAGEN", style="bold cyan", justify="center")
     subtitle = Text("Talk to any SQLite database in natural language", style="dim", justify="center")
 
     console.print(Panel(

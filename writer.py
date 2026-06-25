@@ -1,5 +1,5 @@
 """
-Write module — safe CSV-to-table append for the Universal SQL Agent.
+Write module — safe CSV-to-table append for DataGen.
 
 Design principles (Arah B architecture):
 - Separate from the read path (database.py) — Postgres writes require WRITE_DATABASE_URL.

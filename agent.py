@@ -1,5 +1,5 @@
 """
-Agent loop — Universal SQL Agent.
+Agent loop — DataGen.
 
 System prompt is built in layers: generic instructions + schema + optional domain pack.
 Domain packs are loaded from domains/*.md.
@@ -61,7 +61,7 @@ def load_domain_pack(name: str) -> str | None:
     return pack_path.read_text(encoding="utf-8")
 
 
-GENERIC_INSTRUCTIONS = """You are a Universal SQL Assistant — help users answer questions about \
+GENERIC_INSTRUCTIONS = """You are DataGen — help users answer questions about \
 their database using natural language.
 
 How you work:
@@ -207,7 +207,7 @@ def _call_api_with_retry(messages: list, tools: list) -> Any:
 
 
 class Agent:
-    """Universal SQL Agent with optional domain specialization."""
+    """DataGen with optional domain specialization."""
 
     def __init__(
         self,

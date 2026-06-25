@@ -1,5 +1,5 @@
 """
-Universal SQL Agent — CLI entry point.
+DataGen — CLI entry point.
 
 Usage:
     python main.py --db path/to/database.db
@@ -22,7 +22,7 @@ import ui
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="universal-sql-agent",
+        prog="datagen",
         description="Talk to any SQLite database in natural language.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

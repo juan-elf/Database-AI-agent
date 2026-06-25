@@ -1,4 +1,4 @@
-# Universal SQL Agent
+# DataGen
 
 [![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?logo=streamlit)](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)
@@ -22,6 +22,7 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 - **Hybrid knowledge** — database-first for internal data, Tavily web search for benchmarks, definitions, and external context
 - **Self-correcting** — query errors return a `hint` that the agent uses to fix and retry
 - **Safe by design** — engine-level read-only enforcement; SQL whitelist/blacklist; AI guardrails (`guardrails.py`) with explicit trust boundary: all DB rows, web results, CSV uploads, and query results are tagged as `<untrusted_data>` before reaching the LLM; jailbreak/injection patterns blocked pre-LLM; system prompt leak detection post-LLM
+- **Telegram bot** — same agent accessible via Telegram (`telegram_bot.py`); per-user session isolation, /start /reset /help commands, auto-split long replies; runs via long-polling on any VPS
 - **Pretty CLI** — `rich`-based tables, syntax-highlighted SQL, web result panels, spinners, markdown rendering
 - **Observability** — every session logged to JSONL
 - **Auto-chart generation** — SQL results with numeric/time-series data are automatically visualized as charts in the dashboard chat
@@ -120,6 +121,9 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname
 # Same connection string as DATABASE_URL; role needs INSERT in addition to SELECT
 # Run: GRANT INSERT ON <table> TO <role>; in Supabase first
 WRITE_DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+# Telegram bot (optional — only needed when running telegram_bot.py)
+TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 ```
 
 ---
@@ -158,6 +162,81 @@ When the agent executes a SQL query in the Chat tab, the dashboard automatically
 | Categorical column + numeric | Bar chart |
 | Two numeric columns | Scatter plot |
 | Single value or < 2 rows | No chart (not worth visualizing) |
+
+---
+
+## Telegram Bot
+
+The same agent is accessible via Telegram — no dashboard needed.
+
+### Setup
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) and copy the token
+2. Add `TELEGRAM_BOT_TOKEN=<token>` to `.env`
+3. Run:
+
+```bash
+python telegram_bot.py
+```
+
+### Commands
+
+| Command | Action |
+|---|---|
+| `/start` | Start a new session (clears history) |
+| `/reset` | Clear conversation history, keep session |
+| `/report` | Generate an autonomous Insight Report — sent as `.md` file + chart PNGs |
+| `/help` | Show available commands and example questions |
+| _(any text)_ | Ask a question — agent queries the database and replies |
+| _(send a `.csv` file)_ | Classify + optional append — see CSV Upload below |
+
+### Insight Report (`/report`)
+
+Triggers the same autonomous analyst pipeline as the dashboard:
+
+1. Bot sends a status message ("⏳ Generating... ~30–60 seconds")
+2. `generate_report()` runs in a background thread — profiles DB, plans questions, executes SQL, detects anomalies, writes narrative
+3. Full narrative sent as `insight_report_YYYY-MM-DD_HH-MM.md` (downloadable file)
+4. For each finding with data, a chart PNG is generated and sent via `send_photo()`:
+   - Time/cycle axis → line chart
+   - Categorical + numeric → bar chart
+   - Two numeric columns → scatter
+   - ⚠️ badge in caption if anomaly detected
+5. If chart generation fails (e.g. `kaleido` not installed, data not chartable) → skipped silently
+
+> `kaleido` is required for PNG export: `pip install kaleido>=0.2.1` (already in `requirements.txt`)
+
+### CSV Upload
+
+Send any `.csv` file to the bot (max 500 rows):
+
+1. Bot downloads and parses the file
+2. Runs the router classifier — shows matching table, confidence score, column mapping, and a 5-row preview
+3. If confidence ≥ 80% and `WRITE_DATABASE_URL` is configured → inline keyboard appears:
+   - **✅ Simpan N baris ke `{table}`** — executes the insert, logs to audit JSONL, confirms rows written
+   - **❌ Batal** — cancels, no data written
+4. If write is not configured → shows classification result only, with a setup hint
+5. For files > 500 rows → use the dashboard instead
+
+### Architecture notes
+
+- Each `chat_id` gets its own `Agent` instance — conversation history is isolated per user
+- Runs via **long-polling** — no webhook or public HTTPS domain required; works on any VPS
+- All guardrails (`check_input_with_llm`, `wrap_untrusted`, etc.) are active — the bot reuses `Agent.chat()` directly
+- Rate limit: 10 messages/minute per user (configurable via `TELEGRAM_RATE_LIMIT`)
+- Replies > 4,096 characters are auto-split at line boundaries
+
+### Deploy on VPS
+
+```bash
+# Background process
+mkdir -p logs
+nohup python telegram_bot.py > logs/bot.log 2>&1 &
+echo $! > logs/bot.pid
+
+# Stop
+kill $(cat logs/bot.pid)
+```
 
 ---
 
@@ -443,6 +522,7 @@ universal-sql-agent/
 ├── ui.py                   # rich-based presentation
 ├── logger.py               # JSONL session logger
 ├── dashboard.py            # Streamlit web dashboard
+├── telegram_bot.py         # Telegram bot adapter — reuses Agent.chat(), per-user sessions
 ├── .streamlit/
 │   └── config.toml         # forces light theme on Streamlit Cloud
 ├── domains/
