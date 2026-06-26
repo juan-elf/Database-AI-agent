@@ -245,7 +245,6 @@ class Agent:
 
     def chat(self, user_message: str) -> str:
         """Process one user message through the agent loop."""
-        self.messages.append({"role": "user", "content": user_message})
         if self.logger:
             self.logger.log_user_message(user_message)
 
@@ -255,6 +254,10 @@ class Agent:
             if self.logger:
                 self.logger.log_error("input_blocked", reason)
             return blocked_msg
+
+        # Only append to history after guardrail passes — blocked messages must not
+        # enter conversation context or the next LLM call will answer them anyway.
+        self.messages.append({"role": "user", "content": user_message})
 
         for iteration in range(MAX_ITERATIONS):
             if self.verbose:
