@@ -10,3 +10,4 @@ logs/
 data/*.csv
 .claude/
 evaluator.md
+plan.md
