@@ -477,6 +477,106 @@ def fmt(fig, title="", h=280):
 _PCFG = {"displayModeBar": False}
 
 # ══════════════════════════════════════════════════════════════════════════════
+# LANDING GATE — pre-initialization screen (only DB + domain pack selection)
+# ══════════════════════════════════════════════════════════════════════════════
+
+db_files = get_db_files()   # defined globally so pages can reference it too
+
+
+def _launch_agent(db_path, domain) -> None:
+    """Initialize the agent and stash per-session state."""
+    from database import set_database
+    from agent import Agent
+    set_database(db_path)
+    st.session_state.agent = Agent(domain=domain, verbose=False, enable_logging=True)
+    st.session_state.chat_history = []
+    st.session_state.db_path = db_path
+    st.session_state.domain = domain
+
+
+def _end_session() -> None:
+    """Tear down the agent and all per-session state → returns to the landing screen."""
+    for k in ("agent", "chat_history", "db_path", "domain",
+              "catalog", "catalog_domain", "classify_result",
+              "classify_input_cols", "last_report"):
+        st.session_state.pop(k, None)
+    st.session_state.page = "dashboard"
+
+
+if "agent" not in st.session_state:
+    # Hide the sidebar entirely — landing screen is self-contained
+    st.markdown("""
+    <style>
+      [data-testid="stSidebar"],
+      [data-testid="stSidebarCollapsedControl"],
+      [data-testid="collapsedControl"] { display:none !important; }
+      [data-testid="stVerticalBlockBorderWrapper"]:has(.landing-anchor) {
+          background:var(--surface); border:1px solid var(--border) !important;
+          border-radius:var(--r-lg) !important; box-shadow:var(--shadow-lg) !important;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+    _, mid, _ = st.columns([1, 1.25, 1])
+    with mid:
+        st.markdown("""
+        <div style="text-align:center; padding:7vh 0 18px;">
+            <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:20px;
+                        background:var(--grad);display:flex;align-items:center;justify-content:center;
+                        font-size:36px;box-shadow:var(--shadow-lg);">🔍</div>
+            <div style="font-size:30px;font-weight:800;color:var(--text);letter-spacing:-.6px;">DataGen</div>
+            <div style="font-size:14px;color:var(--text-faint);margin-top:7px;line-height:1.6;">
+                Natural-language SQL agent<br>Pilih database &amp; domain pack untuk mulai
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        with st.container(border=True):
+            st.markdown('<span class="landing-anchor"></span>', unsafe_allow_html=True)
+
+            st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin-bottom:6px;">DATABASE</div>', unsafe_allow_html=True)
+            if db_files:
+                land_db_name = st.selectbox("db", [f.name for f in db_files],
+                                            label_visibility="collapsed", key="land_db")
+                land_db = DATA_DIR / land_db_name
+            else:
+                st.warning("Tidak ada file .db di folder `data/`")
+                land_db = None
+
+            st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin:14px 0 6px;">DOMAIN PACK</div>', unsafe_allow_html=True)
+            try:
+                from agent import list_available_domains
+                land_domains = list_available_domains()
+            except Exception:
+                land_domains = []
+            land_dom_label = st.selectbox("dom", ["(none)"] + land_domains,
+                                          label_visibility="collapsed", key="land_dom")
+            land_dom = None if land_dom_label == "(none)" else land_dom_label
+
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            launched = False
+            if st.button("🚀  Launch Agent", type="primary", use_container_width=True,
+                         disabled=(land_db is None), key="launch_btn"):
+                with st.spinner("Menyiapkan agent..."):
+                    try:
+                        _launch_agent(land_db, land_dom)
+                        launched = True
+                    except Exception as e:
+                        st.error(str(e))
+                if launched:
+                    st.rerun()
+
+        # Theme toggle (centered, below the card)
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        _is_dark = st.session_state.get("dark", False)
+        _tlabel = "☀️  Light Mode" if _is_dark else "🌙  Dark Mode"
+        if st.button(_tlabel, use_container_width=True, key="land_theme_btn"):
+            st.session_state.dark = not _is_dark
+            st.rerun()
+
+    st.stop()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -514,73 +614,34 @@ with st.sidebar:
 
     st.divider()
 
-    # DB selector
-    st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin-bottom:6px;">DATABASE</div>', unsafe_allow_html=True)
-    db_files = get_db_files()
-    sel_db = None
-    if db_files:
-        sel_db_name = st.selectbox("db", [f.name for f in db_files], label_visibility="collapsed")
-        sel_db = DATA_DIR / sel_db_name
-    else:
-        st.warning("Tidak ada .db di folder data/")
-
-    st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin:14px 0 6px;">DOMAIN PACK</div>', unsafe_allow_html=True)
+    # Status card — landing gate guarantees the agent exists here
+    stats = st.session_state.agent.get_stats()
     try:
-        from agent import list_available_domains
-        domains = list_available_domains()
+        from web_search import is_available as _web
+        web_ico = "🌐" if _web() else "⚪"
     except Exception:
-        domains = []
-    dom_label = st.selectbox("dom", ["(none)"] + domains, label_visibility="collapsed")
-    sel_dom = None if dom_label == "(none)" else dom_label
-
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    if sel_db:
-        if st.button("🚀  Inisialisasi Agent", type="primary", use_container_width=True, key="init_btn"):
-            with st.spinner("Connecting..."):
-                try:
-                    from database import set_database
-                    from agent import Agent
-                    set_database(sel_db)
-                    st.session_state.agent = Agent(domain=sel_dom, verbose=False, enable_logging=True)
-                    st.session_state.chat_history = []
-                    st.session_state.db_path = sel_db
-                    st.success(f"✅ {sel_db.name}")
-                except Exception as e:
-                    st.error(str(e))
-
-    # Status card
-    if "agent" in st.session_state:
-        stats = st.session_state.agent.get_stats()
-        try:
-            from web_search import is_available as _web
-            web_ico = "🌐" if _web() else "⚪"
-        except Exception:
-            web_ico = "⚪"
-        st.markdown(f"""
-        <div style="background:var(--grad);
-                    border-radius:var(--r);padding:18px;margin-top:14px;color:white;
-                    box-shadow:0 6px 18px rgba(124,92,252,.28);">
-            <div style="font-size:13px;font-weight:700;margin-bottom:10px;">⚡ Agent Aktif</div>
-            <div style="font-size:11.5px;opacity:.92;line-height:1.9;">
-                📂 {st.session_state.db_path.name}<br>
-                🎯 {stats['domain']}<br>
-                {web_ico} Web search<br>
-                🔑 {stats['session_id']}<br>
-                🪙 {stats['total_tokens']:,} tokens
-            </div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        if st.button("🔄  Reset Chat", use_container_width=True, key="reset_btn"):
-            st.session_state.agent.reset()
-            st.session_state.chat_history = []
-            st.rerun()
-    else:
-        st.markdown("""
-        <div style="background:var(--surface-2);border-radius:var(--r);padding:20px;margin-top:14px;
-                    text-align:center;border:1.5px dashed var(--border);">
-            <div style="font-size:28px;margin-bottom:8px;">🚀</div>
-            <div style="font-size:12px;color:var(--accent);font-weight:600;line-height:1.5;">Pilih database &<br>inisialisasi agent</div>
-        </div>""", unsafe_allow_html=True)
+        web_ico = "⚪"
+    st.markdown(f"""
+    <div style="background:var(--grad);
+                border-radius:var(--r);padding:18px;color:white;
+                box-shadow:0 6px 18px rgba(124,92,252,.28);">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">⚡ Agent Aktif</div>
+        <div style="font-size:11.5px;opacity:.92;line-height:1.9;">
+            📂 {st.session_state.db_path.name}<br>
+            🎯 {stats['domain']}<br>
+            {web_ico} Web search<br>
+            🔑 {stats['session_id']}<br>
+            🪙 {stats['total_tokens']:,} tokens
+        </div>
+    </div>""", unsafe_allow_html=True)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    if st.button("🔄  Reset Chat", use_container_width=True, key="reset_btn"):
+        st.session_state.agent.reset()
+        st.session_state.chat_history = []
+        st.rerun()
+    if st.button("⏹  End Session", use_container_width=True, key="end_btn"):
+        _end_session()
+        st.rerun()
 
     # ── Theme toggle ──────────────────────────────────────────────────────────
     st.divider()
@@ -1176,7 +1237,7 @@ elif page == "classify":
         ), unsafe_allow_html=True)
 
         # ── Build / cache catalog ───────────────────────────────────────────────
-        cur_domain = sel_dom
+        cur_domain = st.session_state.get("domain")
         if (st.session_state.get("catalog") is None
                 or st.session_state.get("catalog_domain") != cur_domain):
             with st.spinner("Membangun katalog tabel..."):
