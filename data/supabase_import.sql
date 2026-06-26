@@ -1,4 +1,4 @@
--- Battery cycles table for Universal SQL Agent demo
+-- Battery cycles table for DataGen demo
 -- Generated from demo.db, 1810 rows
 
 CREATE TABLE IF NOT EXISTS battery_cycles (

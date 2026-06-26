@@ -43,7 +43,7 @@ _inject_secrets()
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="SQL Agent Dashboard",
+    page_title="DataGen Dashboard",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -54,147 +54,228 @@ st.markdown("""
 <style>
 #MainMenu, footer, header { visibility: hidden; }
 
+/* ═══ Design tokens (light) ═══ */
+:root {
+    /* Brand */
+    --primary:#7C5CFC;
+    --primary-2:#5B8CFF;
+    --grad:linear-gradient(135deg,#7C5CFC 0%,#5B8CFF 100%);
+    --accent:#6D4DF2;            /* text accent on light surfaces */
+    --primary-soft:#F1ECFF;      /* hover / selected fill */
+    /* Background & surfaces */
+    --bg-1:#F7F7FC;
+    --bg-2:#F1EFFA;
+    --surface:#FFFFFF;
+    --surface-2:#F6F3FF;         /* info panels, subtle fills */
+    --border:#ECEAF3;
+    /* Text */
+    --text:#1A1A2E;
+    --text-muted:#5B6072;
+    --text-faint:#9A9FB0;
+    /* Status */
+    --success:#16A34A; --success-soft:#E9F9EF;
+    --warning:#D97706; --warning-soft:#FDF3E5;
+    --danger:#EF4444;  --danger-soft:#FDECEC;
+    /* Radius */
+    --r-lg:20px; --r:16px; --r-sm:12px; --r-xs:10px;
+    /* Elevation */
+    --shadow:0 2px 12px rgba(20,20,50,.06);
+    --shadow-sm:0 1px 6px rgba(20,20,50,.04);
+    --shadow-lg:0 8px 26px rgba(124,92,252,.16);
+}
+
 .stApp {
-    background: linear-gradient(135deg, #D8EFE0 0%, #F8FAFF 45%, #EDE7F6 100%);
-    font-family: 'Segoe UI', 'Inter', sans-serif;
+    background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 .block-container {
-    padding: 1.5rem 2rem 1rem !important;
+    padding: 1.75rem 2rem 2rem !important;
     max-width: 100% !important;
 }
 
 /* ── Sidebar ─────────────────────────────────────────── */
 [data-testid="stSidebar"] {
-    background: #FFFFFF !important;
-    border-right: 1px solid #EFEFEF;
-    box-shadow: 3px 0 20px rgba(0,0,0,0.04);
+    background: var(--surface) !important;
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 18px rgba(20,20,50,.04);
 }
 [data-testid="stSidebar"] > div:first-child { padding: 1.5rem 1rem; }
 
 [data-testid="stSidebar"] .stButton > button {
     background: transparent !important;
-    border: none !important;
-    border-radius: 10px !important;
-    color: #666 !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--r-xs) !important;
+    color: var(--text-muted) !important;
     font-weight: 500 !important;
     font-size: 14px !important;
     text-align: left !important;
     padding: 10px 14px !important;
-    margin: 2px 0 !important;
+    margin: 3px 0 !important;
     box-shadow: none !important;
     width: 100% !important;
-    transition: all 0.15s ease !important;
+    transition: background .15s ease, color .15s ease, transform .15s ease !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: #F5F1FF !important;
-    color: #7C5CFC !important;
+    background: var(--primary-soft) !important;
+    color: var(--accent) !important;
 }
 [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg,#7C5CFC,#9B7DFF) !important;
-    color: white !important;
+    background: var(--grad) !important;
+    color: #fff !important;
     font-weight: 600 !important;
+    box-shadow: 0 4px 14px rgba(124,92,252,.30) !important;
 }
 
-/* ── Card base ───────────────────────────────────────── */
+/* ── Surfaces (charts / tables / expanders) ──────────── */
 [data-testid="stPlotlyChart"] {
-    background: white;
-    border-radius: 18px;
-    padding: 8px 12px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 10px 14px;
+    box-shadow: var(--shadow);
 }
 [data-testid="stDataFrame"] {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-sm);
     overflow: hidden;
 }
 [data-testid="stExpander"] {
-    background: white;
-    border-radius: 12px !important;
-    border: 1px solid #F0F0F5 !important;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    background: var(--surface);
+    border-radius: var(--r-sm) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow-sm);
 }
 
 /* ── KPI card ────────────────────────────────────────── */
 .kpi {
-    background: white;
-    border-radius: 18px;
-    padding: 22px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 20px 22px;
+    box-shadow: var(--shadow);
+    transition: transform .15s ease, box-shadow .15s ease;
 }
+.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .kpi-icon {
-    width: 46px; height: 46px;
-    border-radius: 13px;
+    width: 44px; height: 44px;
+    border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; margin-bottom: 14px;
+    font-size: 21px; margin-bottom: 14px;
 }
-.kpi-val { font-size: 34px; font-weight: 800; color: #1A1A2E; line-height: 1; letter-spacing: -1px; }
-.kpi-lbl { font-size: 13px; color: #A0A0B0; font-weight: 500; margin-top: 5px; }
-.kpi-delta { font-size: 11.5px; margin-top: 8px; font-weight: 600; color: #94A3B8; }
+.kpi-val { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -.5px; }
+.kpi-lbl { font-size: 12.5px; color: var(--text-faint); font-weight: 600; margin-top: 6px; }
+.kpi-delta { font-size: 11.5px; margin-top: 8px; font-weight: 600; color: var(--text-muted); }
 
 /* ── Page header ─────────────────────────────────────── */
-.pg-hdr { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; }
-.pg-title { font-size:26px; font-weight:800; color:#1A1A2E; margin:0; }
-.pg-sub { font-size:13px; color:#B0B0C0; margin:2px 0 0 0; }
+.pg-hdr {
+    display:flex; justify-content:space-between; align-items:flex-end;
+    margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid var(--border);
+}
+.pg-title { font-size:25px; font-weight:800; color:var(--text); margin:0; letter-spacing:-.4px; }
+.pg-sub { font-size:13px; color:var(--text-faint); margin:4px 0 0 0; }
 .pg-badge {
-    background:white; border-radius:20px; padding:6px 14px;
-    font-size:12px; color:#888; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:7px 14px; font-size:12px; color:var(--text-muted); box-shadow:var(--shadow-sm);
 }
 
 /* ── Section card ────────────────────────────────────── */
 .s-card {
-    background: white; border-radius: 18px;
-    padding: 22px 24px; box-shadow: 0 2px 14px rgba(0,0,0,0.05);
-    margin-bottom: 4px;
+    background: var(--surface); border:1px solid var(--border); border-radius: var(--r);
+    padding: 20px 22px; box-shadow: var(--shadow);
+    margin-bottom: 6px;
 }
-.s-title { font-size:16px; font-weight:700; color:#1A1A2E; margin-bottom:2px; }
-.s-sub   { font-size:12px; color:#B0B0C0; margin-bottom:14px; }
+.s-title { font-size:15.5px; font-weight:700; color:var(--text); margin-bottom:3px; }
+.s-sub   { font-size:12.5px; color:var(--text-faint); margin-bottom:14px; }
+
+/* ── Info panel (theme-aware) ────────────────────────── */
+.info-panel {
+    background:var(--surface-2); border:1px solid var(--border);
+    border-left:3px solid var(--primary); border-radius:var(--r-sm);
+    padding:16px 20px; margin-bottom:16px;
+}
+.info-title { font-size:14.5px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.info-body  { font-size:13px; color:var(--text-muted); line-height:1.7; }
+
+/* ── Empty state ─────────────────────────────────────── */
+.empty-state {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+    padding:52px 32px; text-align:center; box-shadow:var(--shadow);
+}
+.empty-icon {
+    width:60px; height:60px; border-radius:16px; background:var(--primary-soft);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px; margin:0 auto 16px;
+}
+.empty-title { font-size:18px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.empty-sub   { font-size:13.5px; color:var(--text-muted); line-height:1.6; }
+
+/* ── Success note (theme-aware) ──────────────────────── */
+.note-success {
+    background:var(--success-soft); border:1px solid var(--border);
+    border-left:3px solid var(--success); border-radius:var(--r-sm);
+    padding:16px 20px; color:var(--text-muted); font-size:13.5px; line-height:1.7;
+}
+
+/* ── Captions ────────────────────────────────────────── */
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+    color:var(--text-faint) !important;
+}
+
+/* ── Inputs (theme-aware via tokens) ─────────────────── */
+[data-baseweb="select"] > div {
+    background:var(--surface) !important; border-color:var(--border) !important;
+}
+.stTextArea textarea, .stTextInput input {
+    background:var(--surface) !important; color:var(--text) !important;
+    border-color:var(--border) !important;
+}
+[data-testid="stChatInput"] {
+    background:var(--surface) !important; border:1px solid var(--border) !important;
+    border-radius:var(--r-sm) !important;
+}
+[data-testid="stChatInput"] textarea { color:var(--text) !important; }
+
+/* ── Chat bubbles ────────────────────────────────────── */
+[data-testid="stChatMessage"] {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+}
 
 /* ── Scrollbar ───────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #F5F5F5; }
-::-webkit-scrollbar-thumb { background: #D0D0E0; border-radius: 3px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D2CFE3; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #B9B4D6; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Dark mode CSS (injected on toggle) ────────────────────────────────────────
 _DARK_CSS = """
 <style>
+/* ═══ Design tokens (dark) — only the values flip ═══ */
 .stApp {
-    background: linear-gradient(135deg, #0D0D1A 0%, #141428 50%, #0F1A2E 100%) !important;
+    --accent:#A98BFF;
+    --primary-soft:#241F3A;
+    --bg-1:#0E0E18;  --bg-2:#131223;
+    --surface:#1A1A2A;
+    --surface-2:#201F33;
+    --border:#2A2A3E;
+    --text:#E7E7F6;
+    --text-muted:#A7AAC4;
+    --text-faint:#717492;
+    --success-soft:#14241C;
+    --warning-soft:#2A2113;
+    --danger-soft:#2A1A1A;
+    --shadow:0 2px 14px rgba(0,0,0,.35);
+    --shadow-sm:0 1px 6px rgba(0,0,0,.30);
+    --shadow-lg:0 8px 26px rgba(0,0,0,.45);
 }
-[data-testid="stSidebar"] {
-    background: #13131F !important;
-    border-right: 1px solid #252538 !important;
-    box-shadow: 3px 0 20px rgba(0,0,0,0.3) !important;
-}
-[data-testid="stSidebar"] .stButton > button {
-    color: #9090B0 !important;
-}
-[data-testid="stSidebar"] .stButton > button:hover {
-    background: #2A2A4A !important;
-    color: #AA99FF !important;
-}
-[data-testid="stPlotlyChart"] { background: #1C1C2E !important; }
-[data-testid="stDataFrame"]   { background: #1C1C2E !important; }
-[data-testid="stExpander"]    {
-    background: #1C1C2E !important;
-    border-color: #252538 !important;
-}
-.kpi    { background: #1C1C2E !important; }
-.s-card { background: #1C1C2E !important; }
-.kpi-val  { color: #E0E0FF !important; }
-.kpi-lbl  { color: #5858A0 !important; }
-.s-title  { color: #E0E0FF !important; }
-.s-sub    { color: #5858A0 !important; }
-.pg-title { color: #E0E0FF !important; }
-.pg-sub   { color: #6060A0 !important; }
-.pg-badge { background: #1C1C2E !important; color: #7070A0 !important; }
-[data-testid="stChatMessage"] { background: #1C1C2E !important; }
+/* Force Streamlit's own (light-themed) text legible on dark surfaces */
 .stMarkdown p, .stMarkdown li,
-.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: #D0D0F0 !important; }
-::-webkit-scrollbar-track { background: #1C1C2E; }
-::-webkit-scrollbar-thumb { background: #3A3A5E; }
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4,
+.stMarkdown strong { color: var(--text) !important; }
+::-webkit-scrollbar-thumb { background: #3A3A55; }
 </style>
 """
 
@@ -348,6 +429,23 @@ def page_header(title: str, subtitle: str):
       <div class="pg-badge">📅 {today}</div>
     </div>""", unsafe_allow_html=True)
 
+def empty_state(icon: str, title: str, subtitle: str) -> str:
+    """Consistent 'nothing to show yet' block used across pages (theme-aware)."""
+    return f"""
+    <div class="empty-state">
+        <div class="empty-icon">{icon}</div>
+        <div class="empty-title">{title}</div>
+        <div class="empty-sub">{subtitle}</div>
+    </div>"""
+
+def info_panel(title: str, body: str, icon: str = "💡") -> str:
+    """Consistent 'how it works' explainer panel (theme-aware)."""
+    return f"""
+    <div class="info-panel">
+        <div class="info-title">{icon} {title}</div>
+        <div class="info-body">{body}</div>
+    </div>"""
+
 # ── Chart helpers ─────────────────────────────────────────────────────────────
 
 COLORS = ["#7C5CFC", "#5B8CFF", "#22C55E", "#FF7043", "#FF9800", "#EC4899"]
@@ -384,13 +482,13 @@ _PCFG = {"displayModeBar": False}
 
 with st.sidebar:
     st.markdown("""
-    <div style="display:flex;align-items:center;gap:10px;padding:4px 4px 20px 4px;">
-        <div style="background:linear-gradient(135deg,#7C5CFC,#5B8CFF);width:40px;height:40px;
-                    border-radius:11px;display:flex;align-items:center;justify-content:center;
-                    font-size:20px;">🔍</div>
+    <div style="display:flex;align-items:center;gap:11px;padding:4px 4px 20px 4px;">
+        <div style="background:var(--grad);width:40px;height:40px;
+                    border-radius:12px;display:flex;align-items:center;justify-content:center;
+                    font-size:20px;box-shadow:0 4px 12px rgba(124,92,252,.30);">🔍</div>
         <div>
-            <div style="font-weight:800;font-size:14px;color:#1A1A2E;line-height:1.3;">Universal SQL</div>
-            <div style="font-size:11px;color:#B0B0C0;">Agent Dashboard</div>
+            <div style="font-weight:800;font-size:15px;color:var(--text);line-height:1.3;">DataGen</div>
+            <div style="font-size:11px;color:var(--text-faint);">SQL Agent Dashboard</div>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -417,7 +515,7 @@ with st.sidebar:
     st.divider()
 
     # DB selector
-    st.markdown('<div style="font-size:11px;font-weight:700;color:#C0C0D0;letter-spacing:.6px;margin-bottom:6px;">DATABASE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin-bottom:6px;">DATABASE</div>', unsafe_allow_html=True)
     db_files = get_db_files()
     sel_db = None
     if db_files:
@@ -426,7 +524,7 @@ with st.sidebar:
     else:
         st.warning("Tidak ada .db di folder data/")
 
-    st.markdown('<div style="font-size:11px;font-weight:700;color:#C0C0D0;letter-spacing:.6px;margin:10px 0 6px;">DOMAIN PACK</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:11px;font-weight:700;color:var(--text-faint);letter-spacing:.6px;margin:14px 0 6px;">DOMAIN PACK</div>', unsafe_allow_html=True)
     try:
         from agent import list_available_domains
         domains = list_available_domains()
@@ -459,10 +557,11 @@ with st.sidebar:
         except Exception:
             web_ico = "⚪"
         st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#7C5CFC,#5B8CFF);
-                    border-radius:16px;padding:18px;margin-top:14px;color:white;">
+        <div style="background:var(--grad);
+                    border-radius:var(--r);padding:18px;margin-top:14px;color:white;
+                    box-shadow:0 6px 18px rgba(124,92,252,.28);">
             <div style="font-size:13px;font-weight:700;margin-bottom:10px;">⚡ Agent Aktif</div>
-            <div style="font-size:11.5px;opacity:.9;line-height:1.9;">
+            <div style="font-size:11.5px;opacity:.92;line-height:1.9;">
                 📂 {st.session_state.db_path.name}<br>
                 🎯 {stats['domain']}<br>
                 {web_ico} Web search<br>
@@ -477,10 +576,10 @@ with st.sidebar:
             st.rerun()
     else:
         st.markdown("""
-        <div style="background:#F8F5FF;border-radius:16px;padding:20px;margin-top:14px;
-                    text-align:center;border:1.5px dashed #D0C0FF;">
+        <div style="background:var(--surface-2);border-radius:var(--r);padding:20px;margin-top:14px;
+                    text-align:center;border:1.5px dashed var(--border);">
             <div style="font-size:28px;margin-bottom:8px;">🚀</div>
-            <div style="font-size:12px;color:#7C5CFC;font-weight:600;">Pilih database &<br>inisialisasi agent</div>
+            <div style="font-size:12px;color:var(--accent);font-weight:600;line-height:1.5;">Pilih database &<br>inisialisasi agent</div>
         </div>""", unsafe_allow_html=True)
 
     # ── Theme toggle ──────────────────────────────────────────────────────────
@@ -612,13 +711,10 @@ elif page == "chat":
     page_header("Chat", "Tanya agent dalam bahasa natural")
 
     if "agent" not in st.session_state:
-        st.markdown("""
-        <div style="background:white;border-radius:18px;padding:56px;text-align:center;
-                    box-shadow:0 2px 16px rgba(0,0,0,0.05);">
-            <div style="font-size:52px;margin-bottom:14px;">🤖</div>
-            <div style="font-size:20px;font-weight:700;color:#1A1A2E;margin-bottom:8px;">Agent belum diinisialisasi</div>
-            <div style="font-size:14px;color:#B0B0C0;">Pilih database di sidebar dan klik <strong>Inisialisasi Agent</strong></div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(empty_state(
+            "🤖", "Agent belum diinisialisasi",
+            "Pilih database di sidebar lalu klik <strong>Inisialisasi Agent</strong>.",
+        ), unsafe_allow_html=True)
     else:
         agent_inst = st.session_state.agent
         if "chat_history" not in st.session_state:
@@ -793,13 +889,10 @@ elif page == "history":
     page_header("Riwayat Sesi", "Log percakapan dengan agent")
 
     if not sessions:
-        st.markdown("""
-        <div style="background:white;border-radius:18px;padding:56px;text-align:center;
-                    box-shadow:0 2px 16px rgba(0,0,0,0.05);">
-            <div style="font-size:52px;margin-bottom:14px;">📭</div>
-            <div style="font-size:18px;font-weight:700;color:#1A1A2E;margin-bottom:8px;">Belum ada log</div>
-            <div style="font-size:14px;color:#B0B0C0;">Jalankan agent untuk generate session log</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(empty_state(
+            "📭", "Belum ada log",
+            "Jalankan agent untuk menghasilkan session log.",
+        ), unsafe_allow_html=True)
     else:
         labels = [
             f"{s['start_time'][:16].replace('T',' ')}  ·  {s['session_id']}  ·  {s['questions']} pertanyaan"
@@ -946,27 +1039,18 @@ elif page == "report":
     page_header("Insight Report", "Analisis otomatis — satu tombol, laporan lengkap")
 
     if "agent" not in st.session_state:
-        st.markdown("""
-        <div style="background:#F8F5FF;border-radius:16px;padding:32px;text-align:center;
-                    border:1.5px dashed #D0C0FF;margin-top:24px;">
-            <div style="font-size:36px;margin-bottom:12px;">🧠</div>
-            <div style="font-size:14px;color:#7C5CFC;font-weight:600;">
-                Inisialisasi agent dulu di sidebar untuk generate laporan.
-            </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(empty_state(
+            "🧠", "Agent belum aktif",
+            "Inisialisasi agent di sidebar untuk menghasilkan laporan otomatis.",
+        ), unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#F0EBFF,#EBF3FF);border-radius:16px;
-                    padding:20px 24px;margin-bottom:20px;border:1px solid #E0D5FF;">
-            <div style="font-size:15px;font-weight:700;color:#4A3A8A;margin-bottom:6px;">
-                🤖 Cara kerja
-            </div>
-            <div style="font-size:13px;color:#5A4A9A;line-height:1.7;">
-                Agent membaca profil database → merumuskan 6 pertanyaan analitik sendiri →
-                menjalankan SQL → mendeteksi anomali → mensintesis laporan naratif.
-                <br><strong>Tidak perlu ketik apa pun.</strong>
-            </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(info_panel(
+            "Cara kerja",
+            "Agent membaca profil database → merumuskan 6 pertanyaan analitik sendiri → "
+            "menjalankan SQL → mendeteksi anomali → mensintesis laporan naratif."
+            "<br><strong>Tidak perlu ketik apa pun.</strong>",
+            icon="🤖",
+        ), unsafe_allow_html=True)
 
         col_btn, col_info = st.columns([1, 3])
         with col_btn:
@@ -994,7 +1078,7 @@ elif page == "report":
                 }
                 icon = icons.get(step, "⏳")
                 progress_text.markdown(
-                    f'<div style="font-size:13px;color:#7C5CFC;">'
+                    f'<div style="font-size:13px;color:var(--accent);font-weight:500;">'
                     f'{icon} {detail}</div>',
                     unsafe_allow_html=True,
                 )
@@ -1016,8 +1100,9 @@ elif page == "report":
             # Executive summary
             if r.get("executive_summary"):
                 st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#7C5CFC,#5B8CFF);color:white;
-                            border-radius:16px;padding:24px 28px;margin:20px 0;">
+                <div style="background:var(--grad);color:white;
+                            border-radius:var(--r);padding:24px 28px;margin:20px 0;
+                            box-shadow:0 8px 24px rgba(124,92,252,.24);">
                     <div style="font-size:13px;font-weight:700;opacity:.8;
                                 margin-bottom:8px;letter-spacing:.5px;">RINGKASAN EKSEKUTIF</div>
                     <div style="font-size:15px;line-height:1.7;">{r['executive_summary']}</div>
@@ -1055,11 +1140,8 @@ elif page == "report":
             # Recommendations
             if r.get("recommendations"):
                 st.markdown("### Rekomendasi")
-                st.markdown(f"""
-                <div style="background:#F0FFF4;border-radius:12px;padding:20px 24px;
-                            border-left:4px solid #48BB78;">
-                    {r['recommendations']}
-                </div>""", unsafe_allow_html=True)
+                st.markdown(f'<div class="note-success">{r["recommendations"]}</div>',
+                            unsafe_allow_html=True)
 
             # Full narrative download
             st.divider()
@@ -1079,28 +1161,19 @@ elif page == "classify":
     page_header("Klasifikasi Data", "Cocokkan data baru dengan tabel yang ada — read-only, tidak menulis")
 
     if "agent" not in st.session_state:
-        st.markdown("""
-        <div style="background:#F8F5FF;border-radius:16px;padding:32px;text-align:center;
-                    border:1.5px dashed #D0C0FF;margin-top:24px;">
-            <div style="font-size:36px;margin-bottom:12px;">🧩</div>
-            <div style="font-size:14px;color:#7C5CFC;font-weight:600;">
-                Inisialisasi agent dulu di sidebar untuk membangun katalog tabel.
-            </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(empty_state(
+            "🧩", "Agent belum aktif",
+            "Inisialisasi agent di sidebar untuk membangun katalog tabel.",
+        ), unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#F0EBFF,#EBF3FF);border-radius:16px;
-                    padding:20px 24px;margin-bottom:20px;border:1px solid #E0D5FF;">
-            <div style="font-size:15px;font-weight:700;color:#4A3A8A;margin-bottom:6px;">
-                🧭 Cara kerja
-            </div>
-            <div style="font-size:13px;color:#5A4A9A;line-height:1.7;">
-                Upload atau paste data baru → dibandingkan dengan semua tabel yang ada
-                (nama kolom, tipe, rentang nilai) → LLM menentukan tabel paling cocok,
-                confidence, dan pemetaan kolom.
-                <br><strong>Tidak ada data yang ditulis ke database.</strong>
-            </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(info_panel(
+            "Cara kerja",
+            "Upload atau paste data baru → dibandingkan dengan semua tabel yang ada "
+            "(nama kolom, tipe, rentang nilai) → LLM menentukan tabel paling cocok, "
+            "confidence, dan pemetaan kolom."
+            "<br><strong>Tidak ada data yang ditulis ke database.</strong>",
+            icon="🧭",
+        ), unsafe_allow_html=True)
 
         # ── Build / cache catalog ───────────────────────────────────────────────
         cur_domain = sel_dom
@@ -1183,7 +1256,7 @@ elif page == "classify":
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
                     <div>
                         <div class="s-sub" style="margin-bottom:2px;">TABEL REKOMENDASI</div>
-                        <div style="font-size:20px;font-weight:800;color:#1A1A2E;">🎯 {best}</div>
+                        <div style="font-size:20px;font-weight:800;color:var(--text);">🎯 {best}</div>
                     </div>
                     <div style="background:{badge_bg};color:{badge_fg};border-radius:20px;
                                 padding:10px 20px;font-weight:800;font-size:20px;white-space:nowrap;">
@@ -1200,7 +1273,7 @@ elif page == "classify":
                 st.markdown(f"""
                 <div class="s-card">
                     <div class="s-title">Alasan</div>
-                    <div style="color:#555;font-size:14px;line-height:1.65;">{result['reasoning']}</div>
+                    <div style="color:var(--text-muted);font-size:14px;line-height:1.65;">{result['reasoning']}</div>
                 </div>""", unsafe_allow_html=True)
 
             mapping = result.get("column_mapping", {})
@@ -1243,10 +1316,10 @@ elif page == "classify":
                     st.markdown(f"""
                     <div class="s-card">
                         <div class="s-title">📥 Tambah ke Database</div>
-                        <div style="color:#555;font-size:14px;line-height:1.7;">
+                        <div style="color:var(--text-muted);font-size:14px;line-height:1.7;">
                             Siap menginsert <b>{prev['row_count']:,} baris</b> ke tabel
                             <code>{best_table}</code>&nbsp;
-                            <span style="color:#16A34A;font-weight:600;">(confidence {conf}%)</span>
+                            <span style="color:var(--success);font-weight:600;">(confidence {conf}%)</span>
                         </div>
                     </div>""", unsafe_allow_html=True)
 

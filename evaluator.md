@@ -230,3 +230,61 @@ kode `openai/gpt-oss-120b:free` (`agent.py:29`) — dan nilai contohnya pun gpt-
 | 2 | Fix `.env.example` komentar default GUARDRAIL_MODEL | Kontradiksi langsung kelihatan |
 | 3 | Koreksi wording Tier 2 plan.md + "skip" devlog | Presisi |
 | 4 | Cek drift README | Etalase |
+
+---
+---
+
+# Evaluasi #4 — 2026-06-23 (Telegram Bot, Arah E1–E4)
+
+Evaluasi `telegram_bot.py` (E1 read-only, E2 rate-limit, E3 CSV write, E4 report+chart). Klaim
+plan.md & devlog di-cross-check ke kode. Branch saat ini: `DataGen` (ada commit "Rebrand to DataGen").
+
+## Verdict
+
+**Implementasi rapi; dokumentasi jujur (tidak overclaim).** plan.md:334 & devlog:91 dua-duanya
+tulis eksplisit "Allowlist chat_id di-skip (bot terbuka untuk semua)". Justru kejujuran itu
+mengungkap 1 gap keamanan nyata: write dirilis tanpa access control, melanggar aturan sequencing
+project sendiri.
+
+### Terverifikasi bagus ✅
+- **Reuse `Agent.chat()`** — multi-channel terbukti, bot hanya adapter
+- **Async hygiene benar** — semua call blocking (chat, report, classify, insert, PNG) via
+  `asyncio.to_thread`; event loop tak beku
+- **Human-in-the-loop dipertahankan** — inline keyboard ✅/❌ untuk write (E3)
+- **Guardrail ikut** — `classify_data` bawa `check_input` (CSV), `agent.chat` bawa
+  `check_input_with_llm`
+- Token dari env (tak hardcoded), rate-limit, HTML formatting + auto-split pesan
+- `.env.example` + README terdokumentasi; E1–E4 fungsional; 284 test tetap hijau
+
+## Temuan (urut prioritas)
+
+### 🔴 1. Write di bot terbuka tanpa access control — melanggar aturan project sendiri
+plan.md:338 mengatur eksplisit "Write di bot (E3) hanya setelah access-control (E2) beres".
+Kenyataan: **E2 allowlist di-skip, E3 write tetap dirilis.** Jika `WRITE_DATABASE_URL` di-set,
+siapa pun yang menemukan bot bisa upload CSV → tap "✅ Simpan" → menulis ke DB asli. Confidence
+≥80% + tombol konfirmasi TIDAK menahan user tak-berwenang (Telegram bot discoverable, konfirmasi
+1 tap). Pola sama dengan eksposur write demo publik — lebih terbuka.
+- [ ] **Fix:** `TELEGRAM_ALLOWED_CHAT_IDS` (env, comma-separated) dicek di `handle_document` +
+  `handle_callback` (minimal jalur write). ATAU biarkan `WRITE_DATABASE_URL` unset di bot publik.
+
+### 🟡 2. `telegram_bot.py` tidak punya test sama sekali
+Modul lain tes ketat (284 test), bot nol. Helper murni mudah dites tanpa API Telegram: `_md_to_html`,
+`_split`, `_is_rate_limited`, `_rows_to_png`. Untuk portfolio, satu modul tanpa test mencolok.
+- [ ] Tulis `tests/test_telegram_bot.py` (~15 test untuk helper murni).
+
+### 🟡 3. Minor
+- **Memory leak bot always-on:** `_sessions` & `_pending_insert` tumbuh tanpa eviction; tiap
+  `chat_id` → satu `Agent` history unbounded. Perlu TTL/eviction untuk 24/7.
+- **Bot asumsikan Postgres:** tak ada `set_database()`; butuh `DATABASE_URL` (SQLite lokal tanpa
+  env → `get_schema()` error). Wajar untuk deploy, catat saja.
+- **Chart PNG butuh `kaleido`** (tak di requirements, di-skip diam-diam kalau absen) — report tetap
+  jalan tanpa chart. Sudah didokumentasikan.
+- Commit "Rebrand to DataGen" — pastikan judul README/branding konsisten (belum diverifikasi).
+
+## Urutan rapikan
+| # | Item | Catatan |
+|---|------|---------|
+| 1 | `TELEGRAM_ALLOWED_CHAT_IDS` allowlist (#1) | Tutup lubang write; wajib sebelum bot+write publik |
+| 2 | `tests/test_telegram_bot.py` (#2) | Konsistensi coverage |
+| 3 | TTL/eviction `_sessions` & `_pending_insert` (#3) | Stabilitas bot 24/7 |
+| 4 | Verifikasi branding README (DataGen) | Konsistensi etalase |
