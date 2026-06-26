@@ -1,4 +1,6 @@
-# DataGen
+<p align="center">
+  <img src="assets/datagen-logo-light.png" alt="DataGen" width="280">
+</p>
 
 [![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?logo=streamlit)](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)
