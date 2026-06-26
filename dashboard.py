@@ -71,14 +71,11 @@ st.set_page_config(
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-#MainMenu, footer { visibility: hidden; }
-[data-testid="stToolbar"] { display: none !important; }            /* hide Deploy / ⋮ menu */
-/* keep the header element (so the collapsed-sidebar arrow lives somewhere) but make it
-   invisible & click-through, then re-enable only the reopen arrow */
-header[data-testid="stHeader"] { background: transparent !important; pointer-events: none !important; }
-[data-testid="stExpandSidebarButton"] {
-    visibility: visible !important; opacity: 1 !important; pointer-events: auto !important;
-}
+#MainMenu, footer, header { visibility: hidden; }
+/* header is hidden (above), but its descendant arrow that re-opens a collapsed sidebar
+   inherits that hidden state — explicitly re-show just that one control so the sidebar
+   can be brought back after collapsing */
+[data-testid="stExpandSidebarButton"] { visibility: visible !important; }
 
 /* ═══ Design tokens (light) ═══ */
 :root {
