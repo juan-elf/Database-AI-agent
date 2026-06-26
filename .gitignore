@@ -9,3 +9,4 @@ __pycache__/
 logs/
 data/*.csv
 .claude/
+evaluator.md

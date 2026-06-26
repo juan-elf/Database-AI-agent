@@ -1,6 +1,7 @@
 """
 dashboard.py — DataGen Dashboard (Redesigned)
 """
+import base64
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import re
 import sqlite3
 import sys
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -18,8 +20,19 @@ import streamlit as st
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-DATA_DIR  = PROJECT_ROOT / "data"
-LOGS_DIR  = PROJECT_ROOT / "logs"
+DATA_DIR   = PROJECT_ROOT / "data"
+LOGS_DIR   = PROJECT_ROOT / "logs"
+ASSETS_DIR = PROJECT_ROOT / "assets"
+
+
+@lru_cache(maxsize=8)
+def asset_uri(filename: str) -> str:
+    """Return a base64 data-URI for an asset PNG (inline-embeddable in HTML)."""
+    p = ASSETS_DIR / filename
+    if not p.exists():
+        return ""
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    return f"data:image/png;base64,{b64}"
 
 
 def _inject_secrets() -> None:
@@ -42,9 +55,15 @@ def _inject_secrets() -> None:
 _inject_secrets()
 
 # ── Page config ───────────────────────────────────────────────────────────────
+try:
+    from PIL import Image as _PILImage
+    _PAGE_ICON = _PILImage.open(ASSETS_DIR / "datagen-icon.png")
+except Exception:
+    _PAGE_ICON = "🔍"
+
 st.set_page_config(
     page_title="DataGen Dashboard",
-    page_icon="🔍",
+    page_icon=_PAGE_ICON,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -57,21 +76,21 @@ st.markdown("""
 /* ═══ Design tokens (light) ═══ */
 :root {
     /* Brand */
-    --primary:#7C5CFC;
-    --primary-2:#5B8CFF;
-    --grad:linear-gradient(135deg,#7C5CFC 0%,#5B8CFF 100%);
-    --accent:#6D4DF2;            /* text accent on light surfaces */
-    --primary-soft:#F1ECFF;      /* hover / selected fill */
+    --primary:#0FB6C2;
+    --primary-2:#22D3EE;
+    --grad:linear-gradient(135deg,#0C1A2B 0%,#0FB6C2 100%);
+    --accent:#0C8E9B;            /* text accent on light surfaces */
+    --primary-soft:#E2F7F9;      /* hover / selected fill */
     /* Background & surfaces */
-    --bg-1:#F7F7FC;
-    --bg-2:#F1EFFA;
+    --bg-1:#F5F8FA;
+    --bg-2:#E9F1F4;
     --surface:#FFFFFF;
-    --surface-2:#F6F3FF;         /* info panels, subtle fills */
-    --border:#ECEAF3;
+    --surface-2:#F0F6F8;         /* info panels, subtle fills */
+    --border:#E2E9ED;
     /* Text */
-    --text:#1A1A2E;
-    --text-muted:#5B6072;
-    --text-faint:#9A9FB0;
+    --text:#0C1A2B;
+    --text-muted:#5B6A78;
+    --text-faint:#94A2AD;
     /* Status */
     --success:#16A34A; --success-soft:#E9F9EF;
     --warning:#D97706; --warning-soft:#FDF3E5;
@@ -79,9 +98,9 @@ st.markdown("""
     /* Radius */
     --r-lg:20px; --r:16px; --r-sm:12px; --r-xs:10px;
     /* Elevation */
-    --shadow:0 2px 12px rgba(20,20,50,.06);
-    --shadow-sm:0 1px 6px rgba(20,20,50,.04);
-    --shadow-lg:0 8px 26px rgba(124,92,252,.16);
+    --shadow:0 2px 12px rgba(12,26,43,.06);
+    --shadow-sm:0 1px 6px rgba(12,26,43,.04);
+    --shadow-lg:0 8px 26px rgba(15,182,194,.18);
 }
 
 .stApp {
@@ -123,7 +142,7 @@ st.markdown("""
     background: var(--grad) !important;
     color: #fff !important;
     font-weight: 600 !important;
-    box-shadow: 0 4px 14px rgba(124,92,252,.30) !important;
+    box-shadow: 0 4px 14px rgba(15,182,194,.30) !important;
 }
 
 /* ── Surfaces (charts / tables / expanders) ──────────── */
@@ -255,16 +274,16 @@ _DARK_CSS = """
 <style>
 /* ═══ Design tokens (dark) — only the values flip ═══ */
 .stApp {
-    --accent:#A98BFF;
-    --primary-soft:#241F3A;
-    --bg-1:#0E0E18;  --bg-2:#131223;
-    --surface:#1A1A2A;
-    --surface-2:#201F33;
-    --border:#2A2A3E;
-    --text:#E7E7F6;
-    --text-muted:#A7AAC4;
-    --text-faint:#717492;
-    --success-soft:#14241C;
+    --accent:#3FD6E5;
+    --primary-soft:#10303A;
+    --bg-1:#08131D;  --bg-2:#0B1825;
+    --surface:#0F1E2C;
+    --surface-2:#13283A;
+    --border:#1E3343;
+    --text:#E7EEF2;
+    --text-muted:#9FB0BC;
+    --text-faint:#6A7D8A;
+    --success-soft:#0F241A;
     --warning-soft:#2A2113;
     --danger-soft:#2A1A1A;
     --shadow:0 2px 14px rgba(0,0,0,.35);
@@ -448,7 +467,7 @@ def info_panel(title: str, body: str, icon: str = "💡") -> str:
 
 # ── Chart helpers ─────────────────────────────────────────────────────────────
 
-COLORS = ["#7C5CFC", "#5B8CFF", "#22C55E", "#FF7043", "#FF9800", "#EC4899"]
+COLORS = ["#0FB6C2", "#0C1A2B", "#22D3EE", "#16A34A", "#F59E0B", "#EF4444"]
 
 def _layout():
     dark = st.session_state.get("dark", False)
@@ -519,12 +538,13 @@ if "agent" not in st.session_state:
 
     _, mid, _ = st.columns([1, 1.25, 1])
     with mid:
-        st.markdown("""
+        st.markdown(f"""
         <div style="text-align:center; padding:7vh 0 18px;">
-            <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:20px;
-                        background:var(--grad);display:flex;align-items:center;justify-content:center;
-                        font-size:36px;box-shadow:var(--shadow-lg);">🔍</div>
-            <div style="font-size:30px;font-weight:800;color:var(--text);letter-spacing:-.6px;">DataGen</div>
+            <img src="{asset_uri('datagen-icon.png')}" alt="DataGen"
+                 style="width:78px;height:78px;object-fit:contain;margin:0 auto 16px;display:block;">
+            <div style="font-size:32px;font-weight:800;letter-spacing:-.6px;">
+                <span style="color:var(--text);">Data</span><span style="color:var(--primary);">Gen</span>
+            </div>
             <div style="font-size:14px;color:var(--text-faint);margin-top:7px;line-height:1.6;">
                 Natural-language SQL agent<br>Pilih database &amp; domain pack untuk mulai
             </div>
@@ -581,13 +601,14 @@ if "agent" not in st.session_state:
 # ══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.markdown("""
+    st.markdown(f"""
     <div style="display:flex;align-items:center;gap:11px;padding:4px 4px 20px 4px;">
-        <div style="background:var(--grad);width:40px;height:40px;
-                    border-radius:12px;display:flex;align-items:center;justify-content:center;
-                    font-size:20px;box-shadow:0 4px 12px rgba(124,92,252,.30);">🔍</div>
+        <img src="{asset_uri('datagen-icon.png')}" alt="DataGen"
+             style="width:38px;height:38px;object-fit:contain;">
         <div>
-            <div style="font-weight:800;font-size:15px;color:var(--text);line-height:1.3;">DataGen</div>
+            <div style="font-weight:800;font-size:17px;line-height:1.2;letter-spacing:-.3px;">
+                <span style="color:var(--text);">Data</span><span style="color:var(--primary);">Gen</span>
+            </div>
             <div style="font-size:11px;color:var(--text-faint);">SQL Agent Dashboard</div>
         </div>
     </div>""", unsafe_allow_html=True)
@@ -624,7 +645,7 @@ with st.sidebar:
     st.markdown(f"""
     <div style="background:var(--grad);
                 border-radius:var(--r);padding:18px;color:white;
-                box-shadow:0 6px 18px rgba(124,92,252,.28);">
+                box-shadow:0 6px 18px rgba(15,182,194,.28);">
         <div style="font-size:13px;font-weight:700;margin-bottom:10px;">⚡ Agent Aktif</div>
         <div style="font-size:11.5px;opacity:.92;line-height:1.9;">
             📂 {st.session_state.db_path.name}<br>
@@ -743,8 +764,8 @@ if page == "dashboard":
                 all_out += u.get("total_output", 0)
         if all_in + all_out > 0:
             fig = go.Figure([
-                go.Bar(name="Input",  x=["Tokens"], y=[all_in],  marker_color="#7C5CFC"),
-                go.Bar(name="Output", x=["Tokens"], y=[all_out], marker_color="#5B8CFF"),
+                go.Bar(name="Input",  x=["Tokens"], y=[all_in],  marker_color="#0FB6C2"),
+                go.Bar(name="Output", x=["Tokens"], y=[all_out], marker_color="#0C1A2B"),
             ])
             fig.update_layout(barmode="group")
             fmt(fig, "Input vs Output Tokens", h=260)
@@ -922,7 +943,7 @@ elif page == "explorer":
                     var_name="Phase", value_name="Suhu (°C)")
                 df_t["Phase"] = df_t["Phase"].str.replace("_temperature", "")
                 fig = px.line(df_t, x="cycle", y="Suhu (°C)", color="Phase",
-                              color_discrete_sequence=["#EF4444", "#7C5CFC"],
+                              color_discrete_sequence=["#0FB6C2", "#EF4444"],
                               labels={"cycle": "Siklus"})
                 fmt(fig, f"Profil Suhu ({first_bat})", 280)
                 st.plotly_chart(fig, use_container_width=True, config=_PCFG)
@@ -1058,8 +1079,8 @@ elif page == "analytics":
         with ch2:
             if all_in + all_out > 0:
                 fig = go.Figure([
-                    go.Bar(name="Input",  x=["Tokens"], y=[all_in],  marker_color="#7C5CFC"),
-                    go.Bar(name="Output", x=["Tokens"], y=[all_out], marker_color="#5B8CFF"),
+                    go.Bar(name="Input",  x=["Tokens"], y=[all_in],  marker_color="#0FB6C2"),
+                    go.Bar(name="Output", x=["Tokens"], y=[all_out], marker_color="#0C1A2B"),
                 ])
                 fig.update_layout(barmode="group")
                 fmt(fig, "Input vs Output Tokens", 300)
@@ -1163,7 +1184,7 @@ elif page == "report":
                 st.markdown(f"""
                 <div style="background:var(--grad);color:white;
                             border-radius:var(--r);padding:24px 28px;margin:20px 0;
-                            box-shadow:0 8px 24px rgba(124,92,252,.24);">
+                            box-shadow:0 8px 24px rgba(15,182,194,.24);">
                     <div style="font-size:13px;font-weight:700;opacity:.8;
                                 margin-bottom:8px;letter-spacing:.5px;">RINGKASAN EKSEKUTIF</div>
                     <div style="font-size:15px;line-height:1.7;">{r['executive_summary']}</div>
