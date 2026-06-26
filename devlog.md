@@ -2,6 +2,86 @@
 
 ---
 
+## 2026-06-26 — Session 33: UI Design System + Upload Database (Kelola Data)
+
+### Yang dikerjakan
+
+**1. UI/UX redesign — design system berbasis CSS tokens** (fondasi visual yang kemudian di-re-palette oleh rebrand DataGen di Session 32):
+- Puluhan warna hardcoded → **CSS custom properties** (`--surface`, `--text`, `--text-muted`, `--text-faint`, `--border`, `--primary`, `--grad`, status colors) di `:root` (light). `_DARK_CSS` cukup *flip* nilai token di `.stApp`, bukan override per-komponen → satu sumber kebenaran + dark mode otomatis.
+- **Skala spacing/radius/shadow konsisten** (`--r/-sm/-lg`, `--shadow/-sm/-lg`, spacing 8/12/16/24). Semua card (`.kpi`, `.s-card`, chart, dataframe, expander) disatukan radius/border/shadow/padding-nya.
+- **Helper reusable baru** (dedup, bukan duplikasi): `empty_state(icon, title, sub)` menggantikan 4 empty-state inline yang style-nya beda; `info_panel(title, body, icon)` menggantikan 2 box "Cara kerja".
+- **Fix bug kontras dark mode** (gelap-di-atas-gelap / terang-di-atas-terang yang bikin teks tak terbaca):
+  - Klasifikasi Data: teks "Alasan", "Tabel Rekomendasi", kartu "Tambah ke Database" (`color:#555/#1A1A2E` di dalam `.s-card`) → token.
+  - Insight Report: box Rekomendasi (`#F0FFF4` + teks dipaksa terang) → class `.note-success` theme-aware.
+  - Caption (`stCaptionContainer`) → token-based.
+- **Micro-interaction**: hover-lift halus pada KPI, transisi nav.
+
+**2. Branding leftover cleanup** — sisa "Universal SQL Agent": `page_title` "SQL Agent Dashboard" → "DataGen Dashboard"; logo sidebar "Universal SQL / Agent Dashboard" → "DataGen / SQL Agent Dashboard".
+
+**3. Fix: panah buka-sidebar hilang setelah collapse** (Streamlit 1.58):
+- Root cause: aturan global `header { visibility: hidden }` ikut menyembunyikan `stExpandSidebarButton` (tombol » buka-sidebar) yang berada di dalam header → setelah user collapse sidebar (yang muncul pasca-launch), sidebar tak bisa dibuka lagi.
+- Selektor di CSS landing (`stSidebarCollapsedControl`, `collapsedControl`) ternyata **nama versi lama** — no-op di 1.58. Diverifikasi via scan JS Streamlit: yang valid `stExpandSidebarButton` + `stSidebarCollapseButton`.
+- Fix: berhenti menyembunyikan seluruh `header`; hanya `stToolbar` di-`display:none`, header dibuat transparan + `pointer-events:none` (klik tembus ke konten), lalu `stExpandSidebarButton` di-`pointer-events:auto` + `visibility:visible`. Selektor landing dikoreksi.
+
+**4. Fitur baru: Upload Database (.db) — layar "Kelola Data" pra-launch:**
+- Tombol **🗄️ Kelola Data** di kartu landing (samping Launch Agent) → buka layar full-width pra-launch (state `landing_view`), ada tombol **← Kembali**.
+- `_save_uploaded_db(uploaded)` — validasi (ekstensi `.db/.sqlite/.sqlite3`, file SQLite valid, minimal 1 tabel) lalu simpan ke `data/` via pola tulis `*.uploading` → validasi → `replace()` atomik. **Tidak butuh objek Agent** (murni file I/O + SQLite) — diverifikasi via telusur `router.py`/`writer.py` (pakai `client` level-modul + DB global, bukan instance Agent).
+- `render_data_manager()` — uploader, opsi timpa kalau nama sama, konfirmasi sukses (daftar tabel), tabel "Database Tersedia" (nama/ukuran/jumlah tabel), catatan filesystem ephemeral Streamlit Cloud.
+- File baru otomatis muncul di selektor (re-glob tiap rerun) → pilih → Launch. `landing_view` di-reset ke `"launch"` di `_end_session()`.
+- **Bug Windows ketangkap saat test**: file `.db` invalid bikin `sqlite3.connect` menahan handle → `unlink()` gagal `WinError 32`. Fix: tutup koneksi di `finally` sebelum hapus/replace.
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `dashboard.py` | Design tokens light+dark (`:root`/`_DARK_CSS`); spacing/radius/shadow konsisten; `empty_state()` + `info_panel()`; fix kontras dark mode (classify, recommendations, caption); branding leftover; fix header/`stExpandSidebarButton` + selektor landing; `_save_uploaded_db()` + `render_data_manager()` + state `landing_view` (reset di `_end_session`) |
+
+### Hasil
+- `python -m py_compile dashboard.py` clean di tiap tahap.
+- Dark mode: tidak ada lagi teks gelap-di-gelap / terang-di-terang.
+- Sidebar bisa di-collapse & dibuka kembali (panah » muncul).
+- Upload .db end-to-end: validasi → simpan → muncul di selektor; file rusak ditolak tanpa crash.
+
+### Perlu dites manual (browser, light + dark)
+- Collapse sidebar → panah » muncul & klik membuka lagi; area atas dashboard tetap bisa diklik.
+- Kelola Data: upload .db valid → Simpan → Kembali → muncul di selektor → Launch; file sampah / `.csv`→`.db` ditolak; nama duplikat minta centang Timpa.
+- Streamlit Cloud: `.db` hasil upload ephemeral (commit ke repo untuk permanen).
+
+---
+
+## 2026-06-26 — Session 32: Landing Gate + DataGen Rebrand (logo & palette)
+
+### Yang dikerjakan
+
+**1. Two-part dashboard (gate pattern)** — pisahkan "dashboard utama" (pemilihan) dari "dashboard aktif":
+- Sebelum init: **landing screen** terpusat ala login — hanya selektor Database + Domain Pack + tombol **🚀 Launch Agent**. Sidebar disembunyikan total via CSS.
+- Setelah init: dashboard penuh (sidebar nav + 7 halaman) tampil otomatis.
+- Mekanisme: `if "agent" not in st.session_state: render landing; st.stop()`. Tombol Launch panggil `_launch_agent()` → `st.rerun()` → gerbang dievaluasi ulang → masuk dashboard.
+- **End Session** baru di sidebar — `_end_session()` pop semua state per-sesi (`agent`, `chat_history`, `db_path`, `domain`, `catalog*`, `classify_result*`, `last_report`) → balik ke landing.
+- Selektor DB/domain + tombol init **dipindah keluar** dari sidebar (sekarang hanya di landing). Konsekuensi yang diamankan: `db_files` jadi variabel global; halaman Klasifikasi Data baca domain dari `st.session_state.domain` (bukan `sel_dom` lokal sidebar yang sudah dihapus).
+
+**2. Rebrand visual ke DataGen — logo & palette baru:**
+- Aset logo designer (folder `Logo/`) disalin ke `assets/`: `datagen-icon.png` (transparan), `datagen-logo-light.png`, `datagen-logo-dark.png`. `assets/` tidak di-`.gitignore` → ikut ter-deploy.
+- `asset_uri()` helper (`lru_cache`) — inline base64 PNG ke HTML. Logo di sidebar & landing pakai **icon transparan + wordmark HTML** (`Data` warna `--text`, `Gen` warna `--primary`) supaya theme-aware tanpa kotak background (logo wordmark PNG punya bg solid putih/navy, tidak dipakai untuk overlay).
+- Favicon (`page_icon`) pakai `datagen-icon.png` via PIL `Image.open`, fallback ke "🔍".
+- **Palette ungu/biru → cyan/navy** (hex diekstrak presisi dari mockup designer: cyan `#0FB6C2`, bright cyan `#22D3EE`, navy `#0C1A2B`). Diterapkan ke design tokens light + dark (`:root` + `_DARK_CSS`), `COLORS` chart, marker token-bar charts, temperature chart, dan semua shadow brand (`rgba(124,92,252,…)` → `rgba(15,182,194,…)`). `--grad` jadi navy→cyan (dua warna logo).
+- `.streamlit/config.toml` — `primaryColor`/`backgroundColor`/`textColor` diselaraskan ke palette baru agar widget native Streamlit (slider, checkbox, focus) tidak bentrok.
+
+### Files yang diubah
+
+| File | Perubahan |
+|------|-----------|
+| `dashboard.py` | Landing gate + `_launch_agent`/`_end_session`; sidebar dirampingkan (init dipindah ke landing, +End Session); `asset_uri()` + logo icon/wordmark theme-aware; palette tokens light+dark; semua hex/shadow brand diganti; `cur_domain` baca dari session_state |
+| `.streamlit/config.toml` | `primaryColor` `#7C5CFC`→`#0FB6C2`, `backgroundColor`→`#F5F8FA`, `textColor`→`#0C1A2B` |
+| `assets/` | Baru — 3 PNG logo DataGen (icon + wordmark light/dark) |
+
+### Hasil
+- Verifikasi: 0 sisa hex ungu lama, `py_compile` clean, semua `asset_uri()` hasilkan data-URI valid, startup Streamlit headless tanpa traceback
+- Alur UX baru: landing (pilih DB/domain) → Launch Agent → dashboard → End Session → balik landing
+- Branding konsisten DataGen (cyan/navy) di light & dark mode
+
+---
+
 ## 2026-06-23 — Session 31: Arah E4 — Insight Report + Chart via Telegram
 
 ### Yang dikerjakan

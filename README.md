@@ -28,6 +28,7 @@ Built on **OpenRouter** (free tier, OpenAI-compatible) with a hybrid DB + web se
 - **Pretty CLI** — `rich`-based tables, syntax-highlighted SQL, web result panels, spinners, markdown rendering
 - **Observability** — every session logged to JSONL
 - **Auto-chart generation** — SQL results with numeric/time-series data are automatically visualized as charts in the dashboard chat
+- **In-browser database upload** — a pre-launch *Kelola Data* screen lets you upload a `.db` / `.sqlite` / `.sqlite3` file (validated as a real SQLite database with at least one table) straight into `data/`, then pick it and launch — no manual file copying
 
 ---
 
@@ -139,6 +140,14 @@ A Streamlit web dashboard for visual interaction with the agent.
 streamlit run dashboard.py
 # Opens at http://localhost:8501
 ```
+
+### Launch flow
+
+The dashboard opens on a **landing screen** (the sidebar stays hidden until an agent is running):
+
+1. Pick a **Database** and an optional **Domain Pack**, then click **🚀 Launch Agent** → the full dashboard (sidebar nav + 7 pages) appears.
+2. Need a database that isn't listed yet? Click **🗄️ Kelola Data** to open the pre-launch data manager: upload a `.db` / `.sqlite` / `.sqlite3` file — it's validated as a real SQLite database (≥ 1 table) and saved into `data/`, then appears in the selector. (On Streamlit Cloud the filesystem is ephemeral, so uploaded files are lost on restart — commit the `.db` to the repo for a permanent demo.)
+3. **⏹ End Session** in the sidebar tears down the agent and returns to the landing screen.
 
 ### Dashboard pages
 
@@ -525,6 +534,7 @@ universal-sql-agent/
 ├── logger.py               # JSONL session logger
 ├── dashboard.py            # Streamlit web dashboard
 ├── telegram_bot.py         # Telegram bot adapter — reuses Agent.chat(), per-user sessions
+├── assets/                 # DataGen logo PNGs (icon + wordmark light/dark)
 ├── .streamlit/
 │   └── config.toml         # forces light theme on Streamlit Cloud
 ├── domains/

@@ -71,7 +71,14 @@ st.set_page_config(
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stToolbar"] { display: none !important; }            /* hide Deploy / ⋮ menu */
+/* keep the header element (so the collapsed-sidebar arrow lives somewhere) but make it
+   invisible & click-through, then re-enable only the reopen arrow */
+header[data-testid="stHeader"] { background: transparent !important; pointer-events: none !important; }
+[data-testid="stExpandSidebarButton"] {
+    visibility: visible !important; opacity: 1 !important; pointer-events: auto !important;
+}
 
 /* ═══ Design tokens (light) ═══ */
 :root {
@@ -520,6 +527,108 @@ def _end_session() -> None:
               "classify_input_cols", "last_report"):
         st.session_state.pop(k, None)
     st.session_state.page = "dashboard"
+    st.session_state.landing_view = "launch"
+
+
+def _save_uploaded_db(uploaded) -> dict:
+    """Validate an uploaded SQLite file and save it into data/. Pure file I/O — no agent."""
+    name = Path(uploaded.name).name  # strip any path components
+    if not name.lower().endswith((".db", ".sqlite", ".sqlite3")):
+        return {"ok": False, "msg": "File harus berekstensi .db / .sqlite / .sqlite3"}
+
+    DATA_DIR.mkdir(exist_ok=True)
+    tmp = DATA_DIR / (name + ".uploading")
+    tmp.write_bytes(uploaded.getbuffer())
+
+    # Validate it's a real SQLite db. Close the connection BEFORE any unlink/replace —
+    # on Windows an open handle blocks file deletion (WinError 32).
+    conn, tables, err = None, None, ""
+    try:
+        conn = sqlite3.connect(tmp)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        tables = [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        err = str(e)
+    finally:
+        if conn is not None:
+            conn.close()
+
+    if tables is None:
+        tmp.unlink(missing_ok=True)
+        return {"ok": False, "msg": f"Bukan database SQLite yang valid: {err}"}
+    if not tables:
+        tmp.unlink(missing_ok=True)
+        return {"ok": False, "msg": "Database tidak memiliki tabel apa pun."}
+
+    tmp.replace(DATA_DIR / name)  # atomic move; overwrites if target exists
+    return {"ok": True, "name": name, "tables": tables}
+
+
+def render_data_manager() -> None:
+    """Pre-launch 'Kelola Data' screen — upload new .db files into data/. No agent needed."""
+    top_l, top_r = st.columns([4, 1])
+    with top_l:
+        page_header("Kelola Data", "Upload database (.db) baru sebelum menjalankan agent")
+    with top_r:
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        if st.button("←  Kembali", use_container_width=True, key="dm_back"):
+            st.session_state.landing_view = "launch"
+            st.rerun()
+
+    # ── Upload ────────────────────────────────────────────────────────────────
+    st.markdown('<div class="s-card"><div class="s-title">📤 Upload Database</div>'
+                '<div class="s-sub">Format .db / .sqlite / .sqlite3 — disimpan ke folder '
+                '<code>data/</code></div></div>', unsafe_allow_html=True)
+    up = st.file_uploader("db", type=["db", "sqlite", "sqlite3"],
+                          label_visibility="collapsed", key="dm_upload")
+    if up is not None:
+        name = Path(up.name).name
+        st.caption(f"📦 {name} · {len(up.getvalue()) / 1024:,.0f} KB")
+        exists = (DATA_DIR / name).exists()
+        overwrite = st.checkbox(f"Timpa `{name}` yang sudah ada", key="dm_overwrite") if exists else True
+        if exists and not overwrite:
+            st.caption("⚠️ Nama file sudah ada di data/ — centang untuk menimpa.")
+        if st.button("💾  Simpan ke data/", type="primary", use_container_width=True,
+                     disabled=(exists and not overwrite), key="dm_save"):
+            res = _save_uploaded_db(up)
+            if res["ok"]:
+                st.session_state.dm_saved = res
+                st.rerun()
+            else:
+                st.error(res["msg"])
+
+    if "dm_saved" in st.session_state:
+        r = st.session_state.pop("dm_saved")
+        st.success(f"✅ `{r['name']}` tersimpan — {len(r['tables'])} tabel: {', '.join(r['tables'])}")
+        st.caption("Klik **← Kembali**, lalu pilih database ini untuk Launch Agent.")
+
+    # ── Existing databases ────────────────────────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="s-card"><div class="s-title">🗄️ Database Tersedia</div></div>',
+                unsafe_allow_html=True)
+    files = get_db_files()
+    if not files:
+        st.caption("Belum ada database di folder data/.")
+    else:
+        rows = []
+        for f in files:
+            try:
+                conn = sqlite3.connect(f)
+                cur = conn.cursor()
+                cur.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                ntab = cur.fetchone()[0]
+                conn.close()
+            except Exception:
+                ntab = "?"
+            rows.append({"Database": f.name,
+                         "Ukuran": f"{f.stat().st_size / 1024:,.0f} KB",
+                         "Tabel": ntab})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    st.caption("ℹ️ Di Streamlit Cloud, file hasil upload bersifat sementara (hilang saat app "
+               "restart). Untuk permanen: commit file .db ke repo, atau gunakan Postgres "
+               "(`DATABASE_URL`).")
 
 
 if "agent" not in st.session_state:
@@ -527,14 +636,22 @@ if "agent" not in st.session_state:
     st.markdown("""
     <style>
       [data-testid="stSidebar"],
-      [data-testid="stSidebarCollapsedControl"],
-      [data-testid="collapsedControl"] { display:none !important; }
+      [data-testid="stExpandSidebarButton"],
+      [data-testid="stSidebarCollapseButton"] { display:none !important; }
       [data-testid="stVerticalBlockBorderWrapper"]:has(.landing-anchor) {
           background:var(--surface); border:1px solid var(--border) !important;
           border-radius:var(--r-lg) !important; box-shadow:var(--shadow-lg) !important;
       }
     </style>
     """, unsafe_allow_html=True)
+
+    if "landing_view" not in st.session_state:
+        st.session_state.landing_view = "launch"
+
+    # Full-width "Kelola Data" screen (upload new .db) — still pre-launch
+    if st.session_state.landing_view == "data":
+        render_data_manager()
+        st.stop()
 
     _, mid, _ = st.columns([1, 1.25, 1])
     with mid:
@@ -584,6 +701,10 @@ if "agent" not in st.session_state:
                         st.error(str(e))
                 if launched:
                     st.rerun()
+
+            if st.button("🗄️  Kelola Data", use_container_width=True, key="manage_data_btn"):
+                st.session_state.landing_view = "data"
+                st.rerun()
 
         # Theme toggle (centered, below the card)
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
