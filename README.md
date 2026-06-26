@@ -3,9 +3,9 @@
 </p>
 
 [![Tests](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/juan-elf/Database-AI-agent/actions/workflows/tests.yml)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?logo=streamlit)](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?logo=streamlit)](https://datagen-ai.streamlit.app)
 
-**[Try the live demo →](https://database-ai-agent-nmueb5kstmyzb6apl4rvpr.streamlit.app)**
+**[Try the live demo →](https://datagen-ai.streamlit.app)**
 
 An LLM-powered agent that answers natural language questions about any SQLite or PostgreSQL database. The agent generates SQL, executes it, optionally searches the web for external context, and replies in clean formatted text.
 
